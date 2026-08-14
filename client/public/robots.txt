@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /backend/
+Disallow: /private/
+Disallow: /config/
+Disallow: /scripts/
+Allow: /
+
+Sitemap: https://rekker.co.ke/sitemap.xml
