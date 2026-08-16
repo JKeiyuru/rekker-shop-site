@@ -29,8 +29,8 @@ const brands = [
   {
     id: "biosaff",
     name: "Bio Saff",
-    tagline: "Naturally derived everyday essentials",
-    to: "/brands/saffron",
+    tagline: "Premium cosmetics & body care",
+    to: "/brands/bio-saff",
     tone: "bg-accent text-accent-foreground",
   },
   {

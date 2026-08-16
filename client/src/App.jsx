@@ -39,6 +39,7 @@ const AdminProducts = lazy(() => import("./pages/admin-view/products"));
 const AdminOrders = lazy(() => import("./pages/admin-view/orders"));
 const AdminFeatures = lazy(() => import("./pages/admin-view/features"));
 const AdminDelivery = lazy(() => import("./pages/admin-view/delivery-locations"));
+const AdminMessages = lazy(() => import("./pages/admin-view/messages"));
 
 // Shop - Public
 const LuxuryHome = lazy(() => import("./pages/shopping-view/home"));
@@ -49,6 +50,7 @@ const Contact = lazy(() => import("./pages/shopping-view/contact"));
 const BrandsOverview = lazy(() => import("./pages/shopping-view/brands-overview"));
 const SaffronBrand = lazy(() => import("./pages/shopping-view/brands/saffron"));
 const CornellsBrand = lazy(() => import("./pages/shopping-view/brands/cornells"));
+const BioSaffBrand = lazy(() => import("./pages/shopping-view/brands/bio-saff"));
 const ShoppingListing = lazy(() => import("./pages/shopping-view/listing"));
 const SearchProducts = lazy(() => import("./pages/shopping-view/search"));
 
@@ -83,7 +85,7 @@ function AdminRoute({ isAuthenticated, user, children }) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function LoadingFallback() {
-  return <LuxuryLoader />;
+  return <LuxuryLoader label="One moment" />;
 }
 
 function ScrollToTop() {
@@ -97,7 +99,7 @@ function ScrollToTop() {
 // ── Main App ──────────────────────────────────────────────────────────────────
 function App() {
   const dispatch = useDispatch();
-  const { user, isAuthenticated, isLoading } = useSelector((state) => state.auth);
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
   const [firebaseInitialized, setFirebaseInitialized] = useState(false);
 
   useEffect(() => {
@@ -132,7 +134,12 @@ function App() {
           );
 
           console.log("🔄 Syncing Firebase user with backend...");
-          await dispatch(syncFirebaseAuth(firebaseUser));
+          const synced = await dispatch(syncFirebaseAuth(firebaseUser));
+          // If the Firebase<->backend sync fails (e.g. admin SDK unavailable),
+          // fall back to the JWT cookie session so the user stays signed in.
+          if (!syncFirebaseAuth.fulfilled.match(synced)) {
+            await dispatch(checkAuth());
+          }
         } else {
           console.log("🚫 No Firebase user — checking traditional auth...");
           dispatch(setFirebaseUser(null));
@@ -153,8 +160,10 @@ function App() {
     };
   }, [dispatch]);
 
-  if (!firebaseInitialized || isLoading) {
-    return <LuxuryLoader />;
+  // Only the very first auth resolution blocks the app. Subsequent auth
+  // refreshes must not unmount the tree (that caused the "loads twice" flash).
+  if (!firebaseInitialized) {
+    return <LuxuryLoader label="Loading Rekker" />;
   }
 
   return (
@@ -189,6 +198,7 @@ function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="products" element={<AdminProducts />} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="messages" element={<AdminMessages />} />
             <Route path="features" element={<AdminFeatures />} />
             <Route path="delivery-locations" element={<AdminDelivery />} />
           </Route>
@@ -204,6 +214,8 @@ function App() {
             <Route path="brands" element={<BrandsOverview />} />
             <Route path="brands/saffron" element={<SaffronBrand />} />
             <Route path="brands/cornells" element={<CornellsBrand />} />
+            <Route path="brands/bio-saff" element={<BioSaffBrand />} />
+            <Route path="brands/biosaff" element={<Navigate to="/brands/bio-saff" replace />} />
             <Route path="products" element={<ShoppingListing />} />
             <Route path="listing" element={<Navigate to="/products" replace />} />
             <Route path="search" element={<SearchProducts />} />

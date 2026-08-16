@@ -7,6 +7,7 @@ import {
   ShoppingBag,
   ClipboardList,
   MapPin,
+  Mail,
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,11 @@ const navItems = [
     label: "Orders",
     path: "/admin/orders",
     icon: ClipboardList,
+  },
+  {
+    label: "Messages",
+    path: "/admin/messages",
+    icon: Mail,
   },
   {
     label: "Delivery Locations",

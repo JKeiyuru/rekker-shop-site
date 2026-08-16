@@ -1,6 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 // pages/Contact.jsx - Updated with Red Theme
 import { useState, useEffect } from "react";
+import { API_BASE_URL } from "@/config/config.js";
 import { 
   FaMapMarkerAlt, 
   FaPhone, 
@@ -28,6 +29,7 @@ const Contact = () => {
     inquiryType: "general"
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState(null);
 
   useEffect(() => {
     setIsLoaded(true);
@@ -43,11 +45,20 @@ const Contact = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    // Simulate form submission
-    setTimeout(() => {
-      setIsSubmitting(false);
-      alert("Thank you for your message. We'll get back to you within 24 hours.");
+    setFeedback(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/contact/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          source: "shop",
+          pageUrl: typeof window !== "undefined" ? window.location.href : "",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || "Could not send your message.");
+      setFeedback({ ok: true, text: "Thank you — we'll get back to you within 24 hours." });
       setFormData({
         name: "",
         email: "",
@@ -57,7 +68,11 @@ const Contact = () => {
         message: "",
         inquiryType: "general"
       });
-    }, 2000);
+    } catch (err) {
+      setFeedback({ ok: false, text: err.message || "Something went wrong. Please try again." });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const contactInfo = [
@@ -306,6 +321,12 @@ const Contact = () => {
                       </>
                     )}
                   </button>
+
+                  {feedback && (
+                    <p className={`text-sm font-medium ${feedback.ok ? "text-emerald-600" : "text-red-600"}`}>
+                      {feedback.text}
+                    </p>
+                  )}
                 </form>
               </div>
             </div>

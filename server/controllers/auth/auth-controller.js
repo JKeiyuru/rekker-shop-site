@@ -43,7 +43,7 @@ const registerUser = async (req, res) => {
     res.cookie("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     }).status(201).json({
       success: true,
@@ -83,7 +83,7 @@ const loginUser = async (req, res) => {
     res.cookie("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     }).json({
       success: true,
@@ -98,7 +98,7 @@ const loginUser = async (req, res) => {
 
 // Logout
 const logoutUser = (req, res) => {
-  res.clearCookie("token").json({ success: true, message: "Logged out successfully" });
+  res.clearCookie("token", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: process.env.NODE_ENV === "production" ? "none" : "lax" }).json({ success: true, message: "Logged out successfully" });
 };
 
 // Auth middleware (used by protected routes)

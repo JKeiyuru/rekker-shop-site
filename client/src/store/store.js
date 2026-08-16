@@ -21,6 +21,7 @@ import categoriesReducer from "./categories-slice";
 import promotionsReducer from "./promotions-slice";
 import bundlesReducer from "./bundles-slice";
 import articlesReducer from "./articles-slice";
+import contactReducer from "./contact-slice";
 
 const store = configureStore({
   reducer: {
@@ -38,6 +39,7 @@ const store = configureStore({
     shopWishlist: wishlistReducer,
     commonFeature: commonFeatureSlice,
     brands: brandsReducer,
+    contact: contactReducer,
     categories: categoriesReducer,
     promotions: promotionsReducer,
     bundles: bundlesReducer,

@@ -47,6 +47,7 @@ const shopReviewRouter = require("./routes/shop/review-routes");
 const shopDeliveryRouter = require("./routes/shop/delivery-routes");
 const wishlistRouter = require("./routes/shop/wishlist-routes");
 const commonFeatureRouter = require("./routes/common/feature-routes");
+const contactRouter = require("./routes/common/contact-routes");
 const mpesaRouter = require("./routes/shop/mpesa-routes");
 const shopBrandsRouter = require("./routes/shop/brands-routes");
 const shopCategoriesRouter = require("./routes/shop/categories-routes");
@@ -80,7 +81,9 @@ const defaultOrigins = [
   'http://localhost:5174',
   'http://localhost:3000',
   'https://rekker.co.ke',
-  'https://www.rekker.co.ke'
+  'https://www.rekker.co.ke',
+  'https://shop.rekker.co.ke',
+  'https://www.shop.rekker.co.ke'
 ];
 
 // Combine and deduplicate origins
@@ -202,6 +205,7 @@ app.use("/api/shop/articles", shopArticlesRouter);
 // Wishlist & Common
 app.use("/api/wishlist", wishlistRouter);
 app.use("/api/common/feature", commonFeatureRouter);
+app.use("/api/contact", contactRouter);
 
 // Health Check
 app.get("/health", (req, res) => res.status(200).send("OK"));

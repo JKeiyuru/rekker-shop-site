@@ -40,19 +40,22 @@ function LoginPage() {
     e.preventDefault();
 
     try {
-      // 1. Sign in with Firebase
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
+      // 1. Firebase sign-in is best-effort — accounts created before Firebase
+      //    (or Google-only accounts) must still be able to sign in.
+      let firebaseUid;
+      try {
+        const cred = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+        firebaseUid = cred.user.uid;
+      } catch (fbError) {
+        console.warn("Firebase sign-in unavailable, using backend session:", fbError.code);
+      }
 
-      // 2. Login with backend — this sets the JWT cookie and returns the user role
-      const result = await dispatch(
-        loginUser({ formData, firebaseUid: userCredential.user.uid })
-      );
+      // 2. Backend login — sets the session cookie and returns the user + role.
+      const result = await dispatch(loginUser({ formData, firebaseUid }));
 
       if (loginUser.fulfilled.match(result) && result.payload?.success) {
+        // 3. Confirm the session cookie actually persisted before navigating.
+        await dispatch(checkAuth());
         toast({
           title: "Welcome back!",
           description: "Successfully logged in.",
@@ -61,8 +64,8 @@ function LoginPage() {
         navigateByRole(result.payload.user?.role);
       } else {
         toast({
-          title: result.payload?.message || "Login failed",
-          description: "Please check your credentials and try again.",
+          title: "Login failed",
+          description: result.payload?.message || "Please check your credentials and try again.",
           variant: "destructive",
         });
       }
