@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { loginUser, syncFirebaseAuth } from "@/store/auth-slice";
+import { loginUser, syncFirebaseAuth, checkAuth } from "@/store/auth-slice";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

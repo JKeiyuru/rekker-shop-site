@@ -75,6 +75,7 @@ router.post("/firebase-register", verifyFirebaseToken, async (req, res) => {
     }).status(201).json({
       success: true,
       message: "Registration successful",
+      token,
       user: { id: newUser._id, email: newUser.email, role: newUser.role, userName: newUser.userName },
     });
   } catch (error) {
@@ -118,6 +119,7 @@ router.post("/firebase-login", verifyFirebaseToken, async (req, res) => {
     }).json({
       success: true,
       message: "Logged in successfully",
+      token,
       user: { id: user._id, email: user.email, role: user.role, userName: user.userName },
     });
   } catch (error) {
@@ -182,6 +184,7 @@ router.post("/social-login", verifyFirebaseToken, async (req, res) => {
     }).json({
       success: true,
       message: "Logged in successfully",
+      token: jwtToken,
       user: { id: user._id, email: user.email, role: user.role, userName: user.userName },
     });
   } catch (error) {
@@ -217,8 +220,10 @@ router.get("/check-auth", async (req, res) => {
       }
     }
 
-    // Fallback: JWT cookie
-    const token = req.cookies.token;
+    // Fallback: our own JWT — cookie first, then Bearer (cross-site cookie blocking)
+    const bearerToken =
+      authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+    const token = req.cookies.token || bearerToken;
     if (!token) {
       return res.status(401).json({ success: false, message: "No authentication token found" });
     }

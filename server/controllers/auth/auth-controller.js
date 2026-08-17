@@ -88,6 +88,7 @@ const loginUser = async (req, res) => {
     }).json({
       success: true,
       message: "Logged in successfully",
+      token,
       user: { id: user._id, email: user.email, role: user.role, userName: user.userName },
     });
   } catch (error) {
@@ -119,7 +120,9 @@ const authMiddleware = async (req, res, next) => {
         // fall through to JWT
       }
     }
-    const token = req.cookies.token;
+    const bearerToken =
+      authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+    const token = req.cookies.token || bearerToken;
     if (!token) {
       return res.status(401).json({ success: false, message: "Access denied. No authentication token provided." });
     }

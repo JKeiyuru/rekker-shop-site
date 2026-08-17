@@ -14,6 +14,19 @@ import { auth } from "@/firebase";
 import { signOut } from "firebase/auth";
 import { API_BASE_URL } from "@/config/config.js";
 import { setIsLoggingOut } from "@/lib/logout-flag";
+import { setAuthToken, clearAuthToken, getAuthToken } from "@/lib/auth-token";
+
+// Attach the fallback bearer token to every API request (cookies can be
+// blocked cross-site between shop.rekker.co.ke and the API host).
+axios.interceptors.request.use((config) => {
+  const url = config.url || "";
+  if (url.startsWith(API_BASE_URL) && !config.headers?.Authorization) {
+    const token = getAuthToken();
+    if (token) config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
+  }
+  config.withCredentials = true;
+  return config;
+});
 
 const initialState = {
   isAuthenticated: false,
@@ -35,6 +48,7 @@ export const registerUser = createAsyncThunk(
         { ...formData, firebaseUid },
         { withCredentials: true }
       );
+      if (response.data?.token) setAuthToken(response.data.token);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);
@@ -52,6 +66,7 @@ export const loginUser = createAsyncThunk(
         { ...formData, firebaseUid },
         { withCredentials: true }
       );
+      if (response.data?.token) setAuthToken(response.data.token);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);
@@ -67,6 +82,7 @@ export const logoutUser = createAsyncThunk(
       // Tell App.jsx's onAuthStateChanged listener to ignore the Firebase
       // sign-out event so it doesn't call checkAuth() and re-authenticate.
       setIsLoggingOut(true);
+      clearAuthToken();
 
       await signOut(auth);
 
@@ -145,6 +161,7 @@ export const syncFirebaseAuth = createAsyncThunk(
       console.log("✅ Backend sync successful:", response.data);
 
       if (response.data?.success && response.data?.user) {
+        if (response.data?.token) setAuthToken(response.data.token);
         return response.data;
       }
 
