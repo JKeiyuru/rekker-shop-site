@@ -46,6 +46,7 @@ export const brandOptions = [
   { id: "rekker", label: "Rekker" },
   { id: "saffron", label: "Saffron" },
   { id: "cornells", label: "Cornells" },
+  { id: "biosaff", label: "Bio Saff" },
 ];
 
 // REKKER CATEGORIES - NO SUBCATEGORIES
@@ -155,6 +156,17 @@ export const cornellsCategories = [
   },
 ];
 
+// BIO SAFF CATEGORIES - NO SUBCATEGORIES
+export const biosaffCategories = [
+  { id: "hair-mousse", label: "Hair Mousse & Styling" },
+  { id: "braid-edge-care", label: "Braid & Edge Care" },
+  { id: "shampoos-treatments", label: "Shampoos & Treatments" },
+  { id: "body-mists", label: "Body Mists" },
+  { id: "hair-mists", label: "Hair Mists" },
+  { id: "curl-activator", label: "Curl Activator" },
+  { id: "leave-in-conditioners", label: "Leave-In Conditioners" },
+];
+
 // HELPER FUNCTION: Get categories by brand
 export function getCategoriesByBrand(brand) {
   if (brand === "rekker") {
@@ -163,6 +175,8 @@ export function getCategoriesByBrand(brand) {
     return saffronCategories;
   } else if (brand === "cornells") {
     return cornellsCategories;
+  } else if (brand === "biosaff") {
+    return biosaffCategories;
   }
   return [];
 }
@@ -286,6 +300,15 @@ export const categoryOptionsMap = {
   "dark-beautiful": "Dark & Beautiful",
   "bold-beautiful": "Bold & Beautiful", 
   "cute-pretty": "Cute & Pretty",
+
+  // Bio Saff
+  "hair-mousse": "Hair Mousse & Styling",
+  "braid-edge-care": "Braid & Edge Care",
+  "shampoos-treatments": "Shampoos & Treatments",
+  "body-mists": "Body Mists",
+  "hair-mists": "Hair Mists",
+  "curl-activator": "Curl Activator",
+  "leave-in-conditioners": "Leave-In Conditioners",
 };
 
 // SUBCATEGORY OPTIONS MAP - UNIQUE IDs WITH CATEGORY CONTEXT
@@ -359,6 +382,7 @@ export const brandOptionsMap = {
   "rekker": "Rekker",
   "saffron": "Saffron",
   "cornells": "Cornells",
+  "biosaff": "Bio Saff",
 };
 
 // Filter Options
@@ -367,6 +391,7 @@ export const filterOptions = {
     { id: "rekker", label: "Rekker" },
     { id: "saffron", label: "Saffron" },
     { id: "cornells", label: "Cornells" },
+    { id: "biosaff", label: "Bio Saff" },
   ],
 };
 

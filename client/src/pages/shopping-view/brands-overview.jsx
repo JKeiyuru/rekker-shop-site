@@ -5,7 +5,8 @@ import { Link } from "react-router-dom";
 import { 
   FaGlobe, FaAward, FaCertificate, FaIndustry, 
   FaLeaf, FaHeart, FaFlask, FaStar, FaUsers,
-  FaChevronDown, FaMapMarkerAlt, FaChartLine
+  FaChevronDown, FaMapMarkerAlt, FaChartLine,
+  FaMagic, FaTint, FaSprayCan, FaCut
 } from "react-icons/fa";
 
 const BrandsOverview = () => {
@@ -14,6 +15,7 @@ const BrandsOverview = () => {
   const [scrollProgress, setScrollProgress] = useState(0);
   const saffronRef = useRef(null);
   const cornellsRef = useRef(null);
+  const bioSaffRef = useRef(null);
 
   useEffect(() => {
     setIsLoaded(true);
@@ -40,6 +42,12 @@ const BrandsOverview = () => {
       tagline: "Global Beauty. Trusted Wellness.",
       description: "Premium beauty and wellness products from Starling Parfums, reaching 90+ countries worldwide",
       color: "from-purple-600 via-pink-500 to-rose-500"
+    },
+    {
+      brand: "Bio Saff",
+      tagline: "Premium Cosmetics. Kenyan Made.",
+      description: "Rekker's own premium cosmetics and body care line — hair, braid and body essentials manufactured in Kenya",
+      color: "from-ink via-black to-primary"
     }
   ];
 
@@ -180,6 +188,64 @@ const BrandsOverview = () => {
     partnership: "Rekker's exclusive partnership with Starling Parfums brings these globally celebrated products to Kenya, ensuring authentic quality, competitive pricing, and reliable distribution across all 47 counties."
   };
 
+  const bioSaffStory = {
+    hero: {
+      title: "Bio Saff",
+      subtitle: "Rekker's Own Premium Cosmetics Brand",
+      description: "Bio Saff is formulated and manufactured in Kenya by Rekker — premium hair, braid and body care built for real routines and everyday confidence."
+    },
+    pillars: [
+      {
+        icon: FaIndustry,
+        title: "Made in Kenya",
+        description: "Formulated and manufactured locally, built entirely under the Rekker brand umbrella"
+      },
+      {
+        icon: FaMagic,
+        title: "Styling & Hold",
+        description: "Hair mousse and curl activators that keep curls and coils defined all day"
+      },
+      {
+        icon: FaCut,
+        title: "Braid & Edge Care",
+        description: "Braid sprays and edge control that soothe the scalp and lay edges cleanly"
+      },
+      {
+        icon: FaSprayCan,
+        title: "Signature Mists",
+        description: "Premium fragranced body and hair mists for a finished, long-lasting scent"
+      }
+    ],
+    categories: [
+      {
+        name: "Hair Mousse & Styling",
+        description: "Lightweight hold for curls and coils",
+        gradient: "from-ink to-primary"
+      },
+      {
+        name: "Braid & Edge Care",
+        description: "Braid sprays and edge control",
+        gradient: "from-primary to-black"
+      },
+      {
+        name: "Shampoos & Treatments",
+        description: "Cleansing systems for textured hair",
+        gradient: "from-black to-accent"
+      },
+      {
+        name: "Body & Hair Mists",
+        description: "Premium fragranced finishing mists",
+        gradient: "from-accent to-primary"
+      },
+      {
+        name: "Leave-In Conditioners",
+        description: "Daily moisture and manageability",
+        gradient: "from-primary to-ink"
+      }
+    ],
+    commitment: "Every Bio Saff product is manufactured to the same quality standards as the rest of the Rekker portfolio — rigorously tested, consistently stocked, and priced for salons, retailers and everyday customers across Kenya."
+  };
+
   useEffect(() => {
     const timer = setInterval(() => {
       setActiveSlide((prev) => (prev + 1) % brandSlides.length);
@@ -251,6 +317,12 @@ const BrandsOverview = () => {
                   className="group px-8 py-4 bg-white text-gray-900 rounded-full font-medium transition-all duration-300 hover:bg-white/90 hover:scale-105 min-w-[200px]"
                 >
                   Explore Cornells
+                </button>
+                <button
+                  onClick={() => scrollToSection(bioSaffRef)}
+                  className="group px-8 py-4 bg-primary text-primary-foreground rounded-full font-medium transition-all duration-300 hover:bg-primary/90 hover:scale-105 min-w-[200px]"
+                >
+                  Discover Bio Saff
                 </button>
               </div>
             </div>
@@ -504,6 +576,99 @@ const BrandsOverview = () => {
               <p className="text-xl leading-relaxed max-w-4xl mx-auto opacity-95">
                 {cornellsStory.partnership}
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Divider */}
+      <div className="h-32 bg-gradient-to-b from-purple-50 to-black" />
+
+      {/* Bio Saff Brand Section */}
+      <section ref={bioSaffRef} className="py-32 bg-ink text-ink-foreground">
+        <div className="container mx-auto px-6">
+          <div className="max-w-7xl mx-auto">
+            {/* Bio Saff Hero */}
+            <div className="text-center mb-20">
+              <div className="inline-flex items-center justify-center gap-4 mb-6">
+                <div className="w-20 h-20 bg-primary rounded-2xl flex items-center justify-center shadow-lg">
+                  <FaMagic className="w-10 h-10 text-primary-foreground" />
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-1.5 text-[11px] uppercase tracking-[0.22em] text-white/60 mb-4">
+                A Rekker brand
+              </span>
+              <h2 className="text-5xl md:text-6xl font-bold mb-4">
+                {bioSaffStory.hero.title}
+              </h2>
+              <p className="text-2xl text-primary font-medium mb-6">
+                {bioSaffStory.hero.subtitle}
+              </p>
+              <p className="text-xl text-white/60 max-w-4xl mx-auto leading-relaxed">
+                {bioSaffStory.hero.description}
+              </p>
+            </div>
+
+            {/* Core Pillars */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-20">
+              {bioSaffStory.pillars.map((pillar, index) => (
+                <div
+                  key={index}
+                  className="group bg-white/5 border border-white/10 rounded-3xl p-8 hover:bg-white/10 transition-all duration-500 hover:-translate-y-2"
+                >
+                  <div className="w-16 h-16 bg-primary/15 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                    <pillar.icon className="w-8 h-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-3">
+                    {pillar.title}
+                  </h3>
+                  <p className="text-white/60 leading-relaxed">
+                    {pillar.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Product Categories */}
+            <div className="mb-20">
+              <div className="text-center mb-12">
+                <h3 className="text-4xl font-bold mb-4">Product Range</h3>
+                <p className="text-xl text-white/60 max-w-3xl mx-auto">
+                  A growing collection of premium cosmetics and body care essentials
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {bioSaffStory.categories.map((category, index) => (
+                  <div
+                    key={index}
+                    className="group relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 p-8 hover:bg-white/10 transition-all duration-500"
+                  >
+                    <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${category.gradient}`} />
+                    <h4 className="text-xl font-bold mb-2">
+                      {category.name}
+                    </h4>
+                    <p className="text-white/60">
+                      {category.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Commitment Statement */}
+            <div className="bg-primary rounded-3xl p-12 md:p-16 text-primary-foreground text-center shadow-2xl">
+              <FaAward className="w-16 h-16 mx-auto mb-6 opacity-90" />
+              <h3 className="text-3xl font-bold mb-6">Our Quality Commitment</h3>
+              <p className="text-xl leading-relaxed max-w-4xl mx-auto opacity-95">
+                {bioSaffStory.commitment}
+              </p>
+              <Link
+                to="/brands/bio-saff"
+                className="mt-8 inline-flex items-center gap-2 rounded-full bg-black px-8 py-4 font-bold text-white transition-all hover:scale-105"
+              >
+                Visit the Bio Saff page
+              </Link>
             </div>
           </div>
         </div>

@@ -40,6 +40,8 @@ const AdminOrders = lazy(() => import("./pages/admin-view/orders"));
 const AdminFeatures = lazy(() => import("./pages/admin-view/features"));
 const AdminDelivery = lazy(() => import("./pages/admin-view/delivery-locations"));
 const AdminMessages = lazy(() => import("./pages/admin-view/messages"));
+const AdminBrands = lazy(() => import("./pages/admin-view/brands"));
+const AdminCategories = lazy(() => import("./pages/admin-view/categories"));
 
 // Shop - Public
 const LuxuryHome = lazy(() => import("./pages/shopping-view/home"));
@@ -201,6 +203,8 @@ function App() {
             <Route path="messages" element={<AdminMessages />} />
             <Route path="features" element={<AdminFeatures />} />
             <Route path="delivery-locations" element={<AdminDelivery />} />
+            <Route path="brands" element={<AdminBrands />} />
+            <Route path="categories" element={<AdminCategories />} />
           </Route>
 
           {/* Shopping Routes — public by default */}

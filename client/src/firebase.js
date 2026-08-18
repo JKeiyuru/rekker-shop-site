@@ -5,16 +5,28 @@ import {
   //FacebookAuthProvider 
 } from "firebase/auth";
 
+// Firebase config is read from environment variables (see client/.env, which is
+// gitignored) instead of being hard-coded here. Copy client/.env.example to
+// client/.env and fill in the real values for local development, and set the
+// same VITE_FIREBASE_* variables in your hosting provider's dashboard for
+// production builds (Vercel/Netlify/Render env settings, etc).
 const firebaseConfig = {
-  apiKey: "AIzaSyCzyCwiEgFs0h264o-UBeIaxphwjszQ1Wo",
-  authDomain: "rekkerwebapp.firebaseapp.com",
-  projectId: "rekkerwebapp",
-  storageBucket: "rekkerwebapp.firebasestorage.app",
-  messagingSenderId: "166558603833",
-  appId: "1:166558603833:web:17531fa4ad51f12738cbe8",
-  measurementId: "G-GF8SMC8FQ7"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
+if (!firebaseConfig.apiKey) {
+  // Fails fast in dev if the .env file hasn't been set up yet, instead of
+  // silently shipping a broken Firebase Auth instance.
+  console.error(
+    "Missing VITE_FIREBASE_API_KEY — copy client/.env.example to client/.env and fill in your Firebase project's values."
+  );
+}
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);

@@ -5,7 +5,7 @@ import {
   LogOut, Menu, ShoppingBag, UserCog, Heart, Search, LogIn, UserPlus, Truck,
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Sheet, SheetContent, SheetTrigger } from "../ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "../ui/sheet";
 import { Button } from "../ui/button";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -33,7 +33,9 @@ function StoreHeader() {
   const wishlistItems = useSelector((state) => state.shopWishlist.items || []);
   const [openCartSheet, setOpenCartSheet] = useState(false);
   const [openWishlistSheet, setOpenWishlistSheet] = useState(false);
+  const [openMobileMenu, setOpenMobileMenu] = useState(false);
   const [query, setQuery] = useState("");
+  const [mobileQuery, setMobileQuery] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
@@ -56,6 +58,22 @@ function StoreHeader() {
     e.preventDefault();
     if (!query.trim()) return;
     navigate(`/search?keyword=${encodeURIComponent(query.trim())}`);
+  }
+
+  function closeMobileMenu() {
+    setOpenMobileMenu(false);
+  }
+
+  function onMobileSearch(e) {
+    e.preventDefault();
+    if (!mobileQuery.trim()) return;
+    navigate(`/search?keyword=${encodeURIComponent(mobileQuery.trim())}`);
+    closeMobileMenu();
+  }
+
+  function goTo(path) {
+    navigate(path);
+    closeMobileMenu();
   }
 
   const cartCount = cartItems?.items?.length || 0;
@@ -153,23 +171,88 @@ function StoreHeader() {
                 </DropdownMenu>
               )}
 
-              <Sheet>
+              <Sheet open={openMobileMenu} onOpenChange={setOpenMobileMenu}>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" className="lg:hidden rounded-full" aria-label="Menu">
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-full max-w-xs">
-                  <nav className="mt-10 flex flex-col gap-5">
+                <SheetContent side="right" className="flex w-full max-w-xs flex-col">
+                  <SheetHeader className="text-left">
+                    <SheetTitle className="font-display text-lg font-bold text-ink">
+                      REKKER<span className="text-primary">.</span>
+                    </SheetTitle>
+                  </SheetHeader>
+
+                  <form onSubmit={onMobileSearch} className="mt-6 flex items-center gap-2 rounded-full border border-border bg-secondary px-4 py-2">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <input
+                      value={mobileQuery}
+                      onChange={(e) => setMobileQuery(e.target.value)}
+                      placeholder="Search products, brands…"
+                      className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                      aria-label="Search products"
+                    />
+                  </form>
+
+                  <nav className="mt-8 flex flex-col gap-5">
                     {mainMenuItems.map((item) => (
-                      <Link key={item.id} to={item.path} className="font-display text-lg font-semibold text-ink hover:text-primary">
+                      <Link
+                        key={item.id}
+                        to={item.path}
+                        onClick={closeMobileMenu}
+                        className={`font-display text-lg font-semibold ${location.pathname === item.path ? "text-primary" : "text-ink hover:text-primary"}`}
+                      >
                         {item.label}
                       </Link>
                     ))}
-                    {!isAuthenticated && (
-                      <Link to="/auth/login" className="font-display text-lg font-semibold text-primary">Login</Link>
-                    )}
                   </nav>
+
+                  <div className="mt-auto space-y-3 border-t border-border pt-6">
+                    <button
+                      onClick={() => {
+                        requireAuth(() => setOpenWishlistSheet(true));
+                        closeMobileMenu();
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm font-medium text-ink hover:bg-secondary"
+                    >
+                      <Heart className="h-4 w-4" /> Wishlist
+                      {wishlistItems.length > 0 && (
+                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-bold text-accent-foreground">
+                          {wishlistItems.length}
+                        </span>
+                      )}
+                    </button>
+
+                    {isAuthenticated ? (
+                      <>
+                        <button
+                          onClick={() => goTo("/account")}
+                          className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm font-medium text-ink hover:bg-secondary"
+                        >
+                          <UserCog className="h-4 w-4" /> My account
+                        </button>
+                        <button
+                          onClick={() => {
+                            dispatch(logoutUser());
+                            closeMobileMenu();
+                          }}
+                          className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm font-medium text-primary hover:bg-secondary"
+                        >
+                          <LogOut className="h-4 w-4" /> Logout
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" className="w-full rounded-full" onClick={() => goTo("/auth/login")}>
+                          <LogIn className="mr-1.5 h-4 w-4" /> Login
+                        </Button>
+                        <Button className="w-full rounded-full" onClick={() => goTo("/auth/register")}>
+                          <UserPlus className="mr-1.5 h-4 w-4" /> Sign up
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </SheetContent>
               </Sheet>
             </div>

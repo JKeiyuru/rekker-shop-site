@@ -2,26 +2,46 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/prop-types */
 // client/src/components/shopping-view/filter.jsx - Rekker Product Filter with Fixed Subcategories
-import { Fragment, useState } from "react";
+import { Fragment, useState, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { Label } from "../ui/label";
 import { Checkbox } from "../ui/checkbox";
 import { Separator } from "../ui/separator";
 import { Button } from "../ui/button";
-import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronRight, X, Sparkles } from "lucide-react";
 import {
   brandOptions,
   rekkerCategories,
   saffronCategories,
   cornellsCategories,
+  biosaffCategories,
 } from "@/config";
+import { fetchAllBrands } from "@/store/brands-slice";
+import { fetchAllCategories } from "@/store/categories-slice";
 
 function ProductFilter({ filters, handleFilter }) {
+  const dispatch = useDispatch();
+  const { brandsList } = useSelector((state) => state.brands);
+  const { categoriesList } = useSelector((state) => state.categories);
   const [expandedSections, setExpandedSections] = useState({
     brand: true,
     rekker: false,
     saffron: false,
     cornells: false,
+    biosaff: false,
+    dynamic: false,
   });
+
+  useEffect(() => {
+    dispatch(fetchAllBrands());
+    dispatch(fetchAllCategories());
+  }, [dispatch]);
+
+  // Admin-managed brands/categories not already covered by the static config above.
+  // These are matched against product.brand / product.category by slug.
+  const staticBrandIds = brandOptions.map((b) => b.id);
+  const dynamicBrands = (brandsList || []).filter((b) => !staticBrandIds.includes(b.slug));
+  const dynamicCategories = (categoriesList || []).filter((c) => !c.parentId);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -279,6 +299,120 @@ function ProductFilter({ filters, handleFilter }) {
             </div>
           )}
         </div>
+
+        <Separator />
+
+        {/* Bio Saff Categories */}
+        <div>
+          <button
+            onClick={() => toggleSection('biosaff')}
+            className="flex items-center justify-between w-full mb-3 group"
+          >
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-primary"></div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-ink transition-colors group-hover:text-primary">
+                Bio Saff Products
+              </h3>
+            </div>
+            {expandedSections.biosaff ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
+
+          {expandedSections.biosaff && (
+            <div className="space-y-2 ml-5">
+              {biosaffCategories.map((category) => (
+                <Label
+                  key={category.id}
+                  className="flex items-center gap-2 cursor-pointer rounded-lg p-2 transition-colors hover:bg-secondary"
+                >
+                  <Checkbox
+                    checked={isFilterActive("category", category.id)}
+                    onCheckedChange={() => handleFilterClick("category", category.id)}
+                  />
+                  <span className="font-medium text-sm">{category.label}</span>
+                  {isFilterActive("category", category.id) && (
+                    <span className="ml-auto text-xs font-semibold text-primary">✓</span>
+                  )}
+                </Label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {(dynamicBrands.length > 0 || dynamicCategories.length > 0) && (
+          <>
+            <Separator />
+
+            {/* Admin-managed brands & categories (from the Brands/Categories admin pages) */}
+            <div>
+              <button
+                onClick={() => toggleSection('dynamic')}
+                className="flex items-center justify-between w-full mb-3 group"
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-ink transition-colors group-hover:text-primary">
+                    More Brands & Categories
+                  </h3>
+                </div>
+                {expandedSections.dynamic ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
+
+              {expandedSections.dynamic && (
+                <div className="space-y-4 ml-2">
+                  {dynamicBrands.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Brands</p>
+                      {dynamicBrands.map((brand) => (
+                        <Label
+                          key={brand._id}
+                          className="flex items-center gap-2 cursor-pointer rounded-lg p-2 transition-colors hover:bg-secondary"
+                        >
+                          <Checkbox
+                            checked={isFilterActive("brand", brand.slug)}
+                            onCheckedChange={() => handleFilterClick("brand", brand.slug)}
+                          />
+                          <span className="font-medium text-sm">{brand.name}</span>
+                          {isFilterActive("brand", brand.slug) && (
+                            <span className="ml-auto text-xs font-semibold text-primary">✓</span>
+                          )}
+                        </Label>
+                      ))}
+                    </div>
+                  )}
+
+                  {dynamicCategories.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Categories</p>
+                      {dynamicCategories.map((category) => (
+                        <Label
+                          key={category._id}
+                          className="flex items-center gap-2 cursor-pointer rounded-lg p-2 transition-colors hover:bg-secondary"
+                        >
+                          <Checkbox
+                            checked={isFilterActive("category", category.slug)}
+                            onCheckedChange={() => handleFilterClick("category", category.slug)}
+                          />
+                          <span className="font-medium text-sm">{category.name}</span>
+                          {isFilterActive("category", category.slug) && (
+                            <span className="ml-auto text-xs font-semibold text-primary">✓</span>
+                          )}
+                        </Label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
       </div>
     </div>

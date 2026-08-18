@@ -8,6 +8,8 @@ import {
   ClipboardList,
   MapPin,
   Mail,
+  Tag,
+  FolderTree,
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,6 +24,16 @@ const navItems = [
     label: "Products",
     path: "/admin/products",
     icon: ShoppingBag,
+  },
+  {
+    label: "Brands",
+    path: "/admin/brands",
+    icon: Tag,
+  },
+  {
+    label: "Categories",
+    path: "/admin/categories",
+    icon: FolderTree,
   },
   {
     label: "Orders",
