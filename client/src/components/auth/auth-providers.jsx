@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { FcGoogle } from "react-icons/fc";
 import { useState } from "react";
 import { useDispatch } from "react-redux";
-import { syncFirebaseAuth } from "@/store/auth-slice";
+import { syncFirebaseAuth, checkAuth } from "@/store/auth-slice";
 
 export function AuthProviders({ onSuccess, onError }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -31,16 +31,41 @@ export function AuthProviders({ onSuccess, onError }) {
       // sets the JWT cookie so the user is fully authenticated.
       const syncResult = await dispatch(syncFirebaseAuth(result.user));
 
-      if (syncFirebaseAuth.fulfilled.match(syncResult) && syncResult.payload?.success) {
+      if (syncFirebaseAuth.fulfilled.match(syncResult) && syncResult.payload?.success && syncResult.payload?.user) {
         console.log("✅ Google login sync successful, role:", syncResult.payload?.user?.role);
         // Pass the full payload (which includes user.role) to the caller
         onSuccess(syncResult.payload);
-      } else {
-        console.warn("⚠️ Sync returned no user data — Firebase auth still succeeded");
-        // Fall back: signal success without role info; App.jsx will figure it out
-        // via the onAuthStateChanged listener.
-        onSuccess({ user: { email: result.user.email, role: "user" } });
+        return;
       }
+
+      // The backend sync failed (or returned no user) — do NOT report success.
+      // Reporting success here (as this used to do) meant the UI would show
+      // "Welcome back!" and navigate even though Redux never actually got
+      // isAuthenticated set to true, leaving the header stuck on Login/Sign up.
+      console.error(
+        "❌ Backend sync failed after Google sign-in:",
+        syncResult.payload || syncResult.error
+      );
+
+      // One more legitimate attempt: verify via check-auth using a fresh ID
+      // token, in case /api/auth/social-login itself is misconfigured
+      // (e.g. Admin SDK credentials) but the plain JWT/cookie path still works.
+      try {
+        const idToken = await result.user.getIdToken(true);
+        const authResult = await dispatch(checkAuth(idToken));
+        if (checkAuth.fulfilled.match(authResult) && authResult.payload?.success && authResult.payload?.user) {
+          console.log("✅ Recovered via checkAuth() fallback");
+          onSuccess(authResult.payload);
+          return;
+        }
+      } catch (fallbackError) {
+        console.error("❌ checkAuth() fallback also failed:", fallbackError);
+      }
+
+      onError(
+        syncResult.payload?.message ||
+          "We couldn't finish signing you in with Google. Please try again, or contact support if this keeps happening."
+      );
     } catch (error) {
       console.error("❌ Google sign-in error:", error);
 
