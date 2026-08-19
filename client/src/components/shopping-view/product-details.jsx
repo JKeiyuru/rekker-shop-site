@@ -27,6 +27,7 @@ function ProductDetailsDialog({ open, setOpen, productDetails }) {
   const [reviewMsg, setReviewMsg] = useState("");
   const [rating, setRating] = useState(0);
   const [selectedVariation, setSelectedVariation] = useState(null);
+  const [selectedGalleryImage, setSelectedGalleryImage] = useState(null);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
   const dispatch = useDispatch();
@@ -43,24 +44,41 @@ function ProductDetailsDialog({ open, setOpen, productDetails }) {
     (item) => item._id === productDetails?._id
   );
 
-  // Handle image display logic
-  const displayedImage = selectedVariation?.image || productDetails?.image;
+  // Handle image display logic — priority: selected variation > selected
+  // gallery photo > the product's main image.
+  const displayedImage = selectedVariation?.image || selectedGalleryImage?.image || productDetails?.image;
   const displayedTitle = selectedVariation
     ? `${productDetails?.title} (${selectedVariation.label})`
     : productDetails?.title;
 
-  // Create array of all images for thumbnails
+  // Create array of all images for thumbnails: the main image, any extra
+  // "gallery" photos (front/back/angle shots of the SAME product — not
+  // different sellable options), and variation images (different sizes/colors).
   const getAllImages = () => {
     if (!productDetails) return [];
     
     const images = [];
     
-    // Add original image if no variation is selected, or if selected variation is different
-    if (!selectedVariation || selectedVariation.image !== productDetails.image) {
+    // Add original image if nothing else is selected, or if the selection differs from it
+    const currentlySelectedImage = selectedVariation?.image || selectedGalleryImage?.image;
+    if (!currentlySelectedImage || currentlySelectedImage !== productDetails.image) {
       images.push({
         image: productDetails.image,
         label: "Original",
         isOriginal: true
+      });
+    }
+
+    // Add extra gallery photos
+    if (productDetails.images && productDetails.images.length > 0) {
+      productDetails.images.forEach((url, index) => {
+        if (currentlySelectedImage !== url) {
+          images.push({
+            image: url,
+            label: `Photo ${index + 2}`,
+            isGallery: true
+          });
+        }
       });
     }
     
@@ -68,7 +86,7 @@ function ProductDetailsDialog({ open, setOpen, productDetails }) {
     if (productDetails.variations && productDetails.variations.length > 0) {
       productDetails.variations.forEach(variation => {
         // Don't add the currently selected variation to thumbnails
-        if (!selectedVariation || variation.image !== selectedVariation.image) {
+        if (currentlySelectedImage !== variation.image) {
           images.push(variation);
         }
       });
@@ -83,8 +101,13 @@ function ProductDetailsDialog({ open, setOpen, productDetails }) {
   const handleThumbnailClick = (imageData) => {
     if (imageData.isOriginal) {
       setSelectedVariation(null);
+      setSelectedGalleryImage(null);
+    } else if (imageData.isGallery) {
+      setSelectedGalleryImage(imageData);
+      setSelectedVariation(null);
     } else {
       setSelectedVariation(imageData);
+      setSelectedGalleryImage(null);
     }
   };
 
@@ -190,6 +213,7 @@ function ProductDetailsDialog({ open, setOpen, productDetails }) {
     setRating(0);
     setReviewMsg("");
     setSelectedVariation(null);
+    setSelectedGalleryImage(null);
     setIsDescriptionExpanded(false);
   }
 

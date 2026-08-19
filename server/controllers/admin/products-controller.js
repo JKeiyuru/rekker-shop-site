@@ -23,246 +23,248 @@ const handleImageUpload = async (req, res) => {
   }
 };
 
-// Bulk import products from Excel/CSV
+// ── Bulk import products from Excel/CSV, with a ZIP of real images ─────────
+//
+// Expected spreadsheet columns (header row):
+//   title            - required
+//   brand            - required: rekker | saffron | cornells | biosaff
+//   category         - required: a slug, e.g. "hair-mousse" (must match the
+//                       storefront's category list for that brand — see
+//                       client/src/config/index.js for the exact slugs)
+//   subcategory      - required for saffron/cornells, optional otherwise
+//   description      - optional
+//   sku              - optional
+//   price            - required, number
+//   salePrice        - optional, number
+//   totalStock       - required, number
+//   image            - main photo: either a filename inside the uploaded ZIP
+//                       (e.g. "shampoo-1-main.jpg") or a direct https:// URL
+//   extra_images     - additional photos of the SAME product (angles, back,
+//                       lifestyle shots) — semicolon-separated filenames or
+//                       URLs, e.g. "shampoo-1-b.jpg;shampoo-1-c.jpg"
+//   variation_labels - semicolon-separated labels, e.g. "250ml;500ml;1L"
+//   variation_images - semicolon-separated filenames/URLs, SAME COUNT AND
+//                       ORDER as variation_labels
+//
+// Images are matched by filename against whatever's inside the ZIP (case-
+// insensitive, ignoring any folder structure). The same filename referenced
+// by multiple rows/variations is only uploaded to Cloudinary once.
 const bulkImportProducts = async (req, res) => {
   try {
-    if (!req.file) {
+    const spreadsheetFile = req.files?.file?.[0];
+    const zipFile = req.files?.imagesZip?.[0];
+
+    if (!spreadsheetFile) {
       return res.status(400).json({
         success: false,
-        message: "No file uploaded"
+        message: "No spreadsheet file uploaded",
       });
     }
 
-    let products = [];
-    const file = req.file;
+    // ---- Build a filename -> Buffer map from the ZIP (if provided) --------
+    const imageMap = new Map(); // lowercased basename -> Buffer
+    if (zipFile) {
+      try {
+        const AdmZip = require("adm-zip");
+        const zip = new AdmZip(zipFile.buffer);
+        const entries = zip.getEntries();
+        for (const entry of entries) {
+          if (entry.isDirectory) continue;
+          const baseName = entry.entryName.split("/").pop().trim().toLowerCase();
+          if (!baseName) continue;
+          imageMap.set(baseName, entry.getData());
+        }
+      } catch (zipError) {
+        return res.status(400).json({
+          success: false,
+          message: "Could not read the images ZIP file. Make sure it's a valid .zip archive.",
+          error: zipError.message,
+        });
+      }
+    }
 
-    // Parse Excel or CSV file
-    if (file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.xls')) {
-      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    // ---- Parse the spreadsheet --------------------------------------------
+    let rows = [];
+    const file = spreadsheetFile;
+    if (file.originalname.match(/\.(xlsx|xls)$/i)) {
+      const workbook = XLSX.read(file.buffer, { type: "buffer" });
       const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      products = XLSX.utils.sheet_to_json(worksheet);
-    } else if (file.originalname.endsWith('.csv')) {
-      const csvData = file.buffer.toString();
-      const workbook = XLSX.read(csvData, { type: 'string' });
+      rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+    } else if (file.originalname.match(/\.csv$/i)) {
+      const workbook = XLSX.read(file.buffer.toString(), { type: "string" });
       const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      products = XLSX.utils.sheet_to_json(worksheet);
+      rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
     } else {
       return res.status(400).json({
         success: false,
-        message: "Unsupported file format. Please upload Excel (.xlsx, .xls) or CSV file."
+        message: "Unsupported file format. Please upload an Excel (.xlsx, .xls) or CSV file.",
       });
     }
 
-    console.log(`Processing ${products.length} products for import`);
+    console.log(`Processing ${rows.length} products for import (ZIP images: ${imageMap.size})`);
 
     const results = {
       successful: 0,
       failed: 0,
-      errors: []
+      errors: [],
+      warnings: [],
+      imagesUploaded: 0,
     };
 
-    // Process products in batches to avoid memory issues
-    const batchSize = 10;
-    for (let i = 0; i < products.length; i += batchSize) {
-      const batch = products.slice(i, i + batchSize);
-      
-      for (let j = 0; j < batch.length; j++) {
-        const productData = batch[j];
-        const rowNumber = i + j + 2; // +2 because Excel rows start at 1 and header is row 1
-        
-        try {
-          // Transform Excel data to match your schema
-          const transformedProduct = transformProductData(productData);
-          
-          // Validate required fields
-          if (!transformedProduct.title) {
-            throw new Error("Missing product title");
-          }
-          if (!transformedProduct.brand) {
-            throw new Error("Missing brand");
-          }
-          if (!transformedProduct.category) {
-            throw new Error("Missing category");
-          }
-          if (!transformedProduct.price || isNaN(transformedProduct.price)) {
-            throw new Error("Invalid or missing price");
-          }
+    // Cache so the same filename referenced across rows/variations is only
+    // uploaded to Cloudinary once.
+    const uploadedCache = new Map(); // lowercased filename or URL -> hosted URL
 
-          // Validate brand
-          const validBrands = ['rekker', 'saffron', 'cornells'];
-          if (!validBrands.includes(transformedProduct.brand.toLowerCase())) {
-            throw new Error(`Invalid brand. Must be one of: ${validBrands.join(', ')}`);
-          }
+    const EXT_MIME = {
+      jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+      webp: "image/webp", gif: "image/gif",
+    };
 
-          // Validate subcategory requirement for Saffron and Cornells
-          if ((transformedProduct.brand === 'saffron' || transformedProduct.brand === 'cornells') && !transformedProduct.subcategory) {
-            throw new Error(`Subcategory is required for ${transformedProduct.brand} products`);
-          }
+    async function resolveImageRef(ref, rowNumber, warnings) {
+      if (!ref) return null;
+      const value = String(ref).trim();
+      if (!value) return null;
 
-          // Create new product and bypass image validation for bulk import
-          const newProduct = new Product(transformedProduct);
-          await newProduct.save({ validateBeforeSave: false }); // THIS IS THE KEY LINE
-          results.successful++;
-          console.log(`✅ Successfully imported: ${transformedProduct.title}`);
-          
-        } catch (error) {
-          results.failed++;
-          results.errors.push(`Row ${rowNumber}: ${error.message} - "${productData.title || productData.ITEMS || 'Unknown Product'}"`);
-          console.error(`Import error for row ${rowNumber}:`, error.message);
+      // Already a hosted URL — use as-is, no upload needed.
+      if (/^https?:\/\//i.test(value)) {
+        return value;
+      }
+
+      const key = value.toLowerCase();
+      if (uploadedCache.has(key)) {
+        return uploadedCache.get(key);
+      }
+
+      const buffer = imageMap.get(key.split("/").pop());
+      if (!buffer) {
+        warnings.push(`Row ${rowNumber}: image "${value}" was not found in the uploaded ZIP`);
+        return null;
+      }
+
+      const ext = (value.split(".").pop() || "jpg").toLowerCase();
+      const mime = EXT_MIME[ext] || "image/jpeg";
+      const dataUri = `data:${mime};base64,${buffer.toString("base64")}`;
+
+      const uploadResult = await imageUploadUtil(dataUri);
+      uploadedCache.set(key, uploadResult.secure_url || uploadResult.url);
+      results.imagesUploaded += 1;
+      return uploadResult.secure_url || uploadResult.url;
+    }
+
+    const validBrands = ["rekker", "saffron", "cornells", "biosaff"];
+
+    // Process rows sequentially (not in parallel) so Cloudinary uploads
+    // don't get rate-limited, and so the image cache above works correctly.
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNumber = i + 2; // header is row 1
+      const rowWarningsBefore = results.warnings.length;
+
+      try {
+        const title = String(row.title || row.Title || row.ITEMS || "").trim();
+        const brand = String(row.brand || row.Brand || "").toLowerCase().trim();
+        const category = String(row.category || row.Category || "").toLowerCase().trim().replace(/\s+/g, "-");
+        const subcategory = row.subcategory || row.Subcategory
+          ? String(row.subcategory || row.Subcategory).toLowerCase().trim().replace(/\s+/g, "-")
+          : null;
+        const price = parseFloat(row.price ?? row.Price ?? 0);
+        const salePrice = row.salePrice ? parseFloat(row.salePrice) : 0;
+        const totalStock = parseInt(row.totalStock ?? row.stock ?? row.Stock ?? 0, 10);
+
+        if (!title) throw new Error("Missing product title");
+        if (!validBrands.includes(brand)) {
+          throw new Error(`Invalid brand "${row.brand || ""}". Must be one of: ${validBrands.join(", ")}`);
         }
+        if (!category) throw new Error("Missing category");
+        if ((brand === "saffron" || brand === "cornells") && !subcategory) {
+          throw new Error(`Subcategory is required for ${brand} products`);
+        }
+        if (!price || isNaN(price)) throw new Error("Invalid or missing price");
+        if (isNaN(totalStock)) throw new Error("Invalid or missing totalStock");
+
+        // Main image
+        const mainImageRef = row.image || row.Image || row["Main Image"] || "";
+        const image = await resolveImageRef(mainImageRef, rowNumber, results.warnings);
+
+        // Extra gallery images
+        const extraImagesRaw = String(row.extra_images || row.extraImages || row["Extra Images"] || "").trim();
+        const images = [];
+        if (extraImagesRaw) {
+          const refs = extraImagesRaw.split(/[;,]/).map((s) => s.trim()).filter(Boolean);
+          for (const ref of refs) {
+            const url = await resolveImageRef(ref, rowNumber, results.warnings);
+            if (url) images.push(url);
+          }
+        }
+
+        // Variations: label list + image list, same order
+        const labelListRaw = String(row.variation_labels || row.variationLabels || row["Variation Labels"] || "").trim();
+        const imageListRaw = String(row.variation_images || row.variationImages || row["Variation Images"] || "").trim();
+        const variations = [];
+        if (labelListRaw) {
+          const labels = labelListRaw.split(";").map((s) => s.trim()).filter(Boolean);
+          const imageRefs = imageListRaw ? imageListRaw.split(";").map((s) => s.trim()) : [];
+          if (imageListRaw && imageRefs.length !== labels.length) {
+            results.warnings.push(
+              `Row ${rowNumber}: variation_labels has ${labels.length} entries but variation_images has ${imageRefs.length} — extra entries were ignored`
+            );
+          }
+          for (let v = 0; v < labels.length; v++) {
+            const variationImageUrl = await resolveImageRef(imageRefs[v], rowNumber, results.warnings);
+            if (!variationImageUrl) {
+              results.warnings.push(`Row ${rowNumber}: variation "${labels[v]}" has no resolvable image — skipped`);
+              continue;
+            }
+            variations.push({ label: labels[v], image: variationImageUrl });
+          }
+        }
+
+        if (!image && images.length === 0 && variations.length === 0) {
+          throw new Error(
+            "No usable image found for this product (main image, extra_images, and variation_images all missing or unresolved — check the ZIP for matching filenames)"
+          );
+        }
+
+        const productData = {
+          title,
+          brand,
+          category,
+          subcategory,
+          description: String(row.description || row.Description || "").trim(),
+          sku: row.sku ? String(row.sku).trim() : null,
+          price,
+          salePrice,
+          totalStock,
+          image,
+          images,
+          variations,
+        };
+
+        const newProduct = new Product(productData);
+        await newProduct.save(); // full schema validation — no more silent placeholder fallback
+        results.successful++;
+        console.log(`✅ Imported: ${title}`);
+      } catch (error) {
+        results.failed++;
+        const label = row.title || row.ITEMS || row.Title || "Unknown Product";
+        results.errors.push(`Row ${rowNumber}: ${error.message} — "${label}"`);
+        console.error(`Import error for row ${rowNumber}:`, error.message);
       }
     }
 
     res.json({
       success: true,
       data: results,
-      message: `Import completed: ${results.successful} successful, ${results.failed} failed`
+      message: `Import completed: ${results.successful} successful, ${results.failed} failed, ${results.imagesUploaded} images uploaded`,
     });
-
   } catch (error) {
     console.error("Bulk import error:", error);
     res.status(500).json({
       success: false,
       message: "Bulk import failed",
-      error: error.message
+      error: error.message,
     });
   }
-};
-
-// Helper function to transform Excel data to your schema
-const transformProductData = (excelData) => {
-  // Map Excel columns to your schema - handle different column name variations
-  const product = {
-    title: excelData.title || excelData.ITEMS || excelData['Product Name'] || excelData.Name || '',
-    brand: (excelData.brand || 'cornells').toLowerCase().trim(),
-    category: mapCategory(excelData.category || excelData.Category || excelData.Collection),
-    subcategory: mapSubcategory(excelData.subcategory || excelData.Subcategory || excelData.Type),
-    description: excelData.description || excelData.Description || excelData.ITEMS || excelData.title || '',
-    price: parseFloat(excelData.price || excelData.Price || excelData['SP+VAT'] || excelData.Cost || 0),
-    salePrice: excelData.salePrice ? parseFloat(excelData.salePrice) : 0,
-    totalStock: parseInt(excelData.totalStock || excelData.stock || excelData['TOTAL NO. OF PCs'] || excelData.Quantity || 0),
-    // ADD THE PLACEHOLDER IMAGE HERE:
-    image: "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=400&h=400&fit=crop", // Add this line
-
-    variations: []
-  };
-
-  // Handle variations based on pack size and quantity
-  const packSize = excelData.pack || excelData.PACKG || excelData.Packaging;
-  const piecesPerPack = excelData.pieces || excelData['NO OF PCS/ CTN'] || excelData.Quantity;
-  
-  if (packSize && piecesPerPack) {
-    product.variations.push({
-      label: `${packSize} - ${piecesPerPack}pcs`,
-      // ADD PLACEHOLDER FOR VARIATIONS TOO:
-      image: "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=400&h=400&fit=crop" // Add this line // Images will be added via admin panel later
-    });
-  } else if (packSize) {
-    product.variations.push({
-      label: packSize,
-      // ADD PLACEHOLDER FOR VARIATIONS TOO:
-      image: "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=400&h=400&fit=crop" // Add this line
-    });
-  }
-
-  // If no variations were added but we have size information, create a default variation
-  if (product.variations.length === 0) {
-    const size = excelData.size || excelData.Size || excelData.Capacity;
-    if (size) {
-      product.variations.push({
-        label: size,
-        // ADD PLACEHOLDER FOR VARIATIONS TOO:
-        image: "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=400&h=400&fit=crop" // Add this line
-      });
-    }
-  }
-
-  // If still no variations, create a default one to ensure validation passes when manually editing
-  if (product.variations.length === 0 && excelData.variations) {
-    product.variations.push({
-      label: excelData.variations.toString().trim(),
-      // ADD PLACEHOLDER FOR VARIATIONS TOO:
-      image: "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=400&h=400&fit=crop" // Add this line
-    });
-  }
-
-  return product;
-};
-
-// Helper functions to map your Excel categories to your config
-const mapCategory = (excelCategory) => {
-  if (!excelCategory) return 'super-foods';
-  
-  const categoryMap = {
-    'super foods': 'super-foods',
-    'superfoods': 'super-foods',
-    'dark & beautiful': 'dark-beautiful',
-    'dark and beautiful': 'dark-beautiful',
-    'bold & beautiful': 'bold-beautiful', 
-    'bold and beautiful': 'bold-beautiful',
-    'cute & pretty': 'cute-pretty',
-    'cute and pretty': 'cute-pretty',
-    'estiara passion': 'estiara-passion'
-  };
-  
-  const normalizedCategory = excelCategory.toLowerCase().trim();
-  return categoryMap[normalizedCategory] || normalizedCategory;
-};
-
-const mapSubcategory = (excelSubcategory) => {
-  if (!excelSubcategory) return null;
-  
-  const subcategoryMap = {
-    // Super Foods subcategories
-    'shampoo': 'shampoo',
-    'conditioner': 'conditioner',
-    'hair mask': 'hair-mask',
-    'hair serum': 'hair-serum',
-    'shower gel': 'shower-gel',
-    'body lotion': 'body-lotion',
-    'body scrub': 'body-scrub',
-    'facial scrub': 'facial-scrub',
-    'facial mask': 'facial-mask',
-    'face wash': 'face-wash',
-    'facial cream': 'facial-cream',
-    'baby care': 'baby-care',
-    'gift sets': 'gift-sets',
-    
-    // Dark & Beautiful subcategories
-    'styling products': 'styling-products',
-    'hair treatments': 'hair-treatments',
-    'oils serums': 'oils-serums',
-    'kids hair care': 'kids-hair-care',
-    
-    // Bold & Beautiful subcategories
-    'body cream': 'body-cream',
-    'shower scrub': 'shower-scrub',
-    'hand body lotion': 'hand-body-lotion',
-    'body butter': 'body-butter',
-    'body oil': 'body-oil',
-    'moisturizer': 'moisturizer',
-    'sugar scrub': 'sugar-scrub',
-    'facial care': 'facial-care',
-    'serums': 'serums',
-    'deodorant': 'deodorant',
-    'day night cream': 'day-night-cream',
-    
-    // Cute & Pretty subcategories
-    'baby wash shampoo': 'baby-wash-shampoo',
-    'baby lotion': 'baby-lotion',
-    'baby oil': 'baby-oil',
-    'baby cream': 'baby-cream',
-    'nappy rash cream': 'nappy-rash-cream',
-    'kids shampoo': 'kids-shampoo',
-    'kids conditioner': 'kids-conditioner',
-    'kids styling': 'kids-styling',
-    'kids treatments': 'kids-treatments'
-  };
-  
-  const normalizedSubcategory = excelSubcategory.toLowerCase().trim();
-  return subcategoryMap[normalizedSubcategory] || normalizedSubcategory;
 };
 
 // Add a new product
@@ -273,6 +275,7 @@ const addProduct = async (req, res) => {
 
     const {
       image,
+      images,
       title,
       description,
       brand,
@@ -294,7 +297,7 @@ const addProduct = async (req, res) => {
     }
 
     // Validate brand
-    const validBrands = ['rekker', 'saffron', 'cornells'];
+    const validBrands = ['rekker', 'saffron', 'cornells', 'biosaff'];
     const normalizedBrand = brand.toLowerCase().trim();
     if (!validBrands.includes(normalizedBrand)) {
       return res.status(400).json({
@@ -309,6 +312,26 @@ const addProduct = async (req, res) => {
         success: false,
         message: `Subcategory is required for ${brand} products`,
       });
+    }
+
+    // Parse the extra-images gallery (images[] on the schema) — same
+    // JSON-or-array handling as variations, since it travels through the
+    // same JSON-stringified-in-formData path from the admin form.
+    let parsedImages = [];
+    if (images) {
+      try {
+        if (typeof images === 'string') {
+          parsedImages = JSON.parse(images);
+        } else if (Array.isArray(images)) {
+          parsedImages = images;
+        }
+        parsedImages = (parsedImages || []).filter((url) => typeof url === 'string' && url.trim().length > 0);
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid images format. Must be a JSON array of URLs.",
+        });
+      }
     }
 
     // Initialize parsedVariations as an empty array
@@ -346,16 +369,17 @@ const addProduct = async (req, res) => {
       }
     }
 
-    // Validate that product has either main image or variations
-    if (!image && (!parsedVariations || parsedVariations.length === 0)) {
+    // Validate that product has either main image, gallery images, or variations
+    if (!image && parsedImages.length === 0 && (!parsedVariations || parsedVariations.length === 0)) {
       return res.status(400).json({
         success: false,
-        message: "Product must have either a main image or at least one variation",
+        message: "Product must have either a main image, gallery images, or at least one variation",
       });
     }
 
     const productData = {
       image: image || null,
+      images: parsedImages,
       title: title.trim(),
       description: description ? description.trim() : "",
       brand: normalizedBrand,
@@ -429,6 +453,7 @@ const editProduct = async (req, res) => {
 
     const {
       image,
+      images,
       title,
       description,
       brand,
@@ -450,7 +475,7 @@ const editProduct = async (req, res) => {
     }
 
     // Validate brand
-    const validBrands = ['rekker', 'saffron', 'cornells'];
+    const validBrands = ['rekker', 'saffron', 'cornells', 'biosaff'];
     const normalizedBrand = brand.toLowerCase().trim();
     if (!validBrands.includes(normalizedBrand)) {
       return res.status(400).json({
@@ -465,6 +490,24 @@ const editProduct = async (req, res) => {
         success: false,
         message: `Subcategory is required for ${brand} products`,
       });
+    }
+
+    // Parse the extra-images gallery
+    let parsedImages = [];
+    if (images) {
+      try {
+        if (typeof images === 'string') {
+          parsedImages = JSON.parse(images);
+        } else if (Array.isArray(images)) {
+          parsedImages = images;
+        }
+        parsedImages = (parsedImages || []).filter((url) => typeof url === 'string' && url.trim().length > 0);
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid images format. Must be a JSON array of URLs.",
+        });
+      }
     }
 
     // Initialize parsedVariations as an empty array
@@ -502,16 +545,17 @@ const editProduct = async (req, res) => {
       }
     }
 
-    // Validate that product has either main image or variations
-    if (!image && (!parsedVariations || parsedVariations.length === 0)) {
+    // Validate that product has either main image, gallery images, or variations
+    if (!image && parsedImages.length === 0 && (!parsedVariations || parsedVariations.length === 0)) {
       return res.status(400).json({
         success: false,
-        message: "Product must have either a main image or at least one variation",
+        message: "Product must have either a main image, gallery images, or at least one variation",
       });
     }
 
     const updateData = {
       image: image || null,
+      images: parsedImages,
       title: title.trim(),
       description: description ? description.trim() : "",
       brand: normalizedBrand,

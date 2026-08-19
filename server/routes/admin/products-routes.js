@@ -17,19 +17,33 @@ const {
 const { upload } = require("../../helpers/cloudinary");
 const Product = require("../../models/Product");
 
-// Configure multer for bulk import file uploads
-const bulkUpload = multer({ 
+// Configure multer for bulk import file uploads (spreadsheet + optional images ZIP)
+const bulkUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.includes('excel') || file.mimetype.includes('spreadsheet') || 
-        file.mimetype === 'text/csv' || file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-        file.originalname.match(/\.(xlsx|xls|csv)$/)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only Excel and CSV files are allowed'), false);
+    if (file.fieldname === "file") {
+      const isSpreadsheet =
+        file.mimetype.includes("excel") ||
+        file.mimetype.includes("spreadsheet") ||
+        file.mimetype === "text/csv" ||
+        file.mimetype === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        file.originalname.match(/\.(xlsx|xls|csv)$/i);
+      return isSpreadsheet
+        ? cb(null, true)
+        : cb(new Error("Only Excel and CSV files are allowed for the product sheet"), false);
     }
+    if (file.fieldname === "imagesZip") {
+      const isZip =
+        file.mimetype === "application/zip" ||
+        file.mimetype === "application/x-zip-compressed" ||
+        file.originalname.match(/\.zip$/i);
+      return isZip
+        ? cb(null, true)
+        : cb(new Error("Images must be uploaded as a single .zip file"), false);
+    }
+    cb(new Error("Unexpected file field"), false);
   },
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 40 * 1024 * 1024 } // 40MB — the zip of images is the larger of the two
 });
 
 // Image upload
@@ -41,8 +55,16 @@ router.put("/edit/:id", editProduct);
 router.delete("/delete/:id", deleteProduct);
 router.get("/get", fetchAllProducts);
 
-// Bulk import route
-router.post("/bulk-import", bulkUpload.single("file"), bulkImportProducts);
+// Bulk import route — accepts the product sheet ("file") and an optional
+// ZIP of real product images ("imagesZip")
+router.post(
+  "/bulk-import",
+  bulkUpload.fields([
+    { name: "file", maxCount: 1 },
+    { name: "imagesZip", maxCount: 1 },
+  ]),
+  bulkImportProducts
+);
 
 // Brand-specific routes
 router.get("/brand/:brand", getProductsByBrand);
@@ -134,43 +156,51 @@ router.post("/test-brand", async (req, res) => {
 // Bulk import template download route
 router.get("/bulk-import-template", (req, res) => {
   try {
-    // Create template data
+    // Create template data reflecting the real-image import format
     const templateData = [
       {
-        "title": "Brazilian Keratin Shampoo Super Foods – 1000ML",
+        "title": "Brazilian Keratin Shampoo – 1000ML",
         "brand": "cornells",
         "category": "super-foods",
         "subcategory": "shampoo",
-        "description": "Brazilian Keratin Shampoo Super Foods – 1000ML (Cornells Series)",
+        "description": "Brazilian Keratin Shampoo – 1000ML (Cornells Series)",
+        "sku": "COR-BKS-1000",
         "price": "985.99",
         "salePrice": "",
         "totalStock": "96",
-        "variations": "[{\"label\": \"1000ml\", \"image\": \"\"}]"
+        "image": "cornells-bks-main.jpg",
+        "extra_images": "cornells-bks-back.jpg;cornells-bks-angle.jpg",
+        "variation_labels": "",
+        "variation_images": ""
       },
       {
-        "title": "Avocado Manuka Honey Shampoo Super Foods – 1000ML",
-        "brand": "cornells", 
-        "category": "super-foods",
-        "subcategory": "shampoo",
-        "description": "Avocado Manuka Honey Shampoo Super Foods – 1000ML (Cornells Series)",
-        "price": "985.99",
+        "title": "Bio Saff Curl Activator",
+        "brand": "biosaff",
+        "category": "curl-activator",
+        "subcategory": "",
+        "description": "Defines and holds curls all day",
+        "sku": "BS-CA-250",
+        "price": "650",
         "salePrice": "",
-        "totalStock": "108",
-        "variations": "[{\"label\": \"1000ml\", \"image\": \"\"}]"
+        "totalStock": "40",
+        "image": "https://res.cloudinary.com/example/already-hosted-image.jpg",
+        "extra_images": "",
+        "variation_labels": "250ml;500ml",
+        "variation_images": "bs-curl-250.jpg;bs-curl-500.jpg"
       }
     ];
 
     // Create workbook
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(templateData);
-    
+
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(workbook, worksheet, "Products Template");
-    
+
     // Set headers for file download
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="product-import-template.xlsx"');
-    
+
     // Generate and send the file
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
     res.send(buffer);

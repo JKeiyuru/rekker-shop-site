@@ -21,6 +21,7 @@ import {
 import { Fragment, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import VariationUploader from "@/components/admin-view/variation-uploader";
+import GalleryUploader from "@/components/admin-view/gallery-uploader";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,7 @@ import { Upload } from "lucide-react";
 const initialFormData = {
   brand: "",
   image: null,
+  images: [],
   title: "",
   description: "",
   category: "",
@@ -86,6 +88,7 @@ function AdminProducts() {
     const payload = {
       ...formData,
       image: uploadedImageUrl || formData.image || null,
+      images: formData.images || [],
       price: Number(formData.price),
       salePrice: formData.salePrice ? Number(formData.salePrice) : 0,
       totalStock: Number(formData.totalStock),
@@ -182,10 +185,11 @@ function AdminProducts() {
       return value !== "" && value !== null && value !== undefined;
     });
 
-    // Check if there's at least one image (main image or variations)
+    // Check if there's at least one image (main image, gallery, or variations)
     const hasMainImage = uploadedImageUrl || formData.image;
+    const hasGalleryImages = formData.images?.length > 0;
     const hasVariations = formData.variations?.length > 0;
-    const hasImage = hasMainImage || hasVariations;
+    const hasImage = hasMainImage || hasGalleryImages || hasVariations;
 
     // Validate price values
     const priceValid = formData.price && !isNaN(Number(formData.price)) && Number(formData.price) >= 0;
@@ -434,6 +438,13 @@ function AdminProducts() {
 
             <Separator />
 
+            {/* Extra Product Photos (gallery) */}
+            <div>
+              <GalleryUploader formData={formData} setFormData={setFormData} />
+            </div>
+
+            <Separator />
+
             {/* Product Variations */}
             <div>
               <VariationUploader 
@@ -470,7 +481,7 @@ function AdminProducts() {
                   )}
                   <li>• Price must be a valid number ≥ 0</li>
                   <li>• Stock must be a valid number ≥ 0</li>
-                  <li>• At least one image (main image or variation) is required</li>
+                  <li>• At least one image (main image, extra photo, or variation) is required</li>
                 </ul>
               </div>
             )}
