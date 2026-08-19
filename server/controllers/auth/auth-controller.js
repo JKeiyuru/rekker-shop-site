@@ -48,6 +48,7 @@ const registerUser = async (req, res) => {
     }).status(201).json({
       success: true,
       message: "Registration successful",
+      token,
       user: { id: newUser._id, email: newUser.email, role: newUser.role, userName: newUser.userName },
     });
   } catch (error) {

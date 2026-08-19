@@ -9,7 +9,7 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/firebase";
 import { AuthProviders } from "@/components/auth/auth-providers";
 import { API_BASE_URL } from "@/config/config.js";
-import { checkAuth } from "@/store/auth-slice";
+import { setUser } from "@/store/auth-slice";
 import { setAuthToken } from "@/lib/auth-token";
 
 const initialState = { userName: "", email: "", password: "" };
@@ -21,10 +21,14 @@ function AuthRegister() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  async function finishSignup(role) {
-    await dispatch(checkAuth());
+  // We already have the confirmed user object from the register response —
+  // no need to round-trip through checkAuth() again, which relies on a
+  // cross-site cookie that can be blocked by the browser and would silently
+  // knock the user back to "logged out" even though registration succeeded.
+  function finishSignup(user) {
+    dispatch(setUser(user));
     toast({ title: "Account created", description: "Welcome to Rekker." });
-    navigate(role === "admin" ? "/admin/dashboard" : "/", { replace: true });
+    navigate(user?.role === "admin" ? "/admin/dashboard" : "/", { replace: true });
   }
 
   async function onSubmit(event) {
@@ -64,7 +68,7 @@ function AuthRegister() {
 
       if (data.success) {
         if (data.token) setAuthToken(data.token);
-        await finishSignup(data?.user?.role);
+        finishSignup(data.user);
       } else {
         if (createdFirebaseUser) {
           try { await createdFirebaseUser.delete(); } catch { /* ignore */ }
@@ -119,7 +123,7 @@ function AuthRegister() {
       </div>
 
       <AuthProviders
-        onSuccess={(userData) => finishSignup(userData?.user?.role)}
+        onSuccess={(userData) => finishSignup(userData?.user)}
         onError={(error) =>
           toast({ title: "Registration failed", description: error, variant: "destructive" })
         }

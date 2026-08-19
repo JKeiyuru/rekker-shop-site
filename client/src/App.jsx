@@ -4,7 +4,7 @@
 //   2. Google sign-in for existing email/password accounts correctly updates UI
 //   3. Logout immediately updates UI — no reload needed (uses logout-flag module)
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -104,6 +104,15 @@ function App() {
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   const [firebaseInitialized, setFirebaseInitialized] = useState(false);
 
+  // Kept in sync so the onAuthStateChanged callback below (subscribed once on
+  // mount) can check "are we already authenticated?" without needing
+  // isAuthenticated in its dependency array (which would tear down and
+  // resubscribe the Firebase listener on every auth change).
+  const isAuthenticatedRef = useRef(isAuthenticated);
+  useEffect(() => {
+    isAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
   useEffect(() => {
     let mounted = true;
     console.log("🚀 App: Setting up Firebase auth listener...");
@@ -135,17 +144,38 @@ function App() {
             })
           );
 
-          console.log("🔄 Syncing Firebase user with backend...");
-          const synced = await dispatch(syncFirebaseAuth(firebaseUser));
-          // If the Firebase<->backend sync fails (e.g. admin SDK unavailable),
-          // fall back to the JWT cookie session so the user stays signed in.
-          if (!syncFirebaseAuth.fulfilled.match(synced)) {
+          // Only run the Google social-login sync for actual Google sign-ins.
+          // syncFirebaseAuth always posted to /api/auth/social-login with
+          // provider: "google" hard-coded, so it used to fire (and could
+          // fail/race) on every email+password sign-in too — email/password
+          // login.jsx and register.jsx already handle their own auth state
+          // directly against /api/auth/login and /api/auth/register, so
+          // there's nothing for this listener to do for them.
+          const providerId = firebaseUser.providerData?.[0]?.providerId;
+
+          if (providerId === "google.com") {
+            console.log("🔄 Syncing Google user with backend...");
+            const synced = await dispatch(syncFirebaseAuth(firebaseUser));
+            // If the Firebase<->backend sync fails (e.g. admin SDK unavailable),
+            // fall back to the JWT cookie session so the user stays signed in.
+            if (!syncFirebaseAuth.fulfilled.match(synced)) {
+              await dispatch(checkAuth());
+            }
+          } else if (!isAuthenticatedRef.current) {
+            // Email/password provider (or unknown) and we don't already have a
+            // confirmed session — this is a page-load session restore, not a
+            // fresh login/register in progress, so it's safe to verify here.
+            console.log("🔄 Restoring session for email/password user...");
             await dispatch(checkAuth());
+          } else {
+            console.log("✅ Already authenticated — skipping redundant checkAuth()");
           }
         } else {
           console.log("🚫 No Firebase user — checking traditional auth...");
           dispatch(setFirebaseUser(null));
-          await dispatch(checkAuth());
+          if (!isAuthenticatedRef.current) {
+            await dispatch(checkAuth());
+          }
         }
       } catch (error) {
         console.error("❌ Auth verification error:", error);

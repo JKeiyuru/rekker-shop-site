@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { loginUser, syncFirebaseAuth, checkAuth } from "@/store/auth-slice";
+import { loginUser, syncFirebaseAuth } from "@/store/auth-slice";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,12 +50,14 @@ function LoginPage() {
         console.warn("Firebase sign-in unavailable, using backend session:", fbError.code);
       }
 
-      // 2. Backend login — sets the session cookie and returns the user + role.
+      // 2. Backend login — sets the session cookie/token and returns the user + role.
+      //    loginUser.fulfilled already puts isAuthenticated + user into Redux, so
+      //    there's no need to re-verify via checkAuth() here — that extra round
+      //    trip relies on a cross-site cookie that can be blocked by the browser,
+      //    and a failure there would incorrectly reset the just-confirmed login.
       const result = await dispatch(loginUser({ formData, firebaseUid }));
 
       if (loginUser.fulfilled.match(result) && result.payload?.success) {
-        // 3. Confirm the session cookie actually persisted before navigating.
-        await dispatch(checkAuth());
         toast({
           title: "Welcome back!",
           description: "Successfully logged in.",
