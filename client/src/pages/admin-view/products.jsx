@@ -18,6 +18,8 @@ import {
   editProduct,
   fetchAllProducts,
 } from "@/store/admin/products-slice";
+import { fetchAllAdminBrands } from "@/store/admin/brands-slice";
+import { fetchAllAdminCategories } from "@/store/admin/categories-slice";
 import { Fragment, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import VariationUploader from "@/components/admin-view/variation-uploader";
@@ -54,8 +56,44 @@ function AdminProducts() {
   const [showBulkImport, setShowBulkImport] = useState(false);
 
   const { productList, isLoading } = useSelector((state) => state.adminProducts);
+  const { brandList: adminBrandList } = useSelector((state) => state.adminBrands);
+  const { categoryList: adminCategoryList } = useSelector((state) => state.adminCategories);
   const dispatch = useDispatch();
   const { toast } = useToast();
+
+  // Load live brand/category records so the Add Product dialog can suggest
+  // them (in addition to always allowing a brand-new value to be typed in).
+  useEffect(() => {
+    dispatch(fetchAllAdminBrands());
+    dispatch(fetchAllAdminCategories());
+  }, [dispatch]);
+
+  // The relational Brand collection uses its own slugs (e.g. "saffron-milan",
+  // "bio-saff") which don't always match the short legacy codes already used
+  // across the app ("saffron", "biosaff") — this reverses that mapping so
+  // suggestions insert the short code products actually use, keeping new
+  // picks consistent with existing filters/categories instead of quietly
+  // forking into a second, disconnected brand.
+  const BRAND_SLUG_TO_LEGACY = { "saffron-milan": "saffron", "bio-saff": "biosaff" };
+
+  const brandSuggestions = (adminBrandList || []).map((b) => ({
+    id: BRAND_SLUG_TO_LEGACY[b.slug] || b.slug,
+    label: b.name,
+  }));
+
+  const categorySuggestions = (adminCategoryList || [])
+    .filter((c) => !c.parentId)
+    .map((c) => ({ id: c.slug, label: c.name }));
+
+  const subcategorySuggestions = (adminCategoryList || [])
+    .filter((c) => c.parentId)
+    .map((c) => ({ id: c.slug, label: c.name }));
+
+  const dynamicSuggestions = {
+    brand: brandSuggestions,
+    category: categorySuggestions,
+    subcategory: subcategorySuggestions,
+  };
 
   // Debug logging
   useEffect(() => {
@@ -172,13 +210,9 @@ function AdminProducts() {
   }
 
   function isFormValid() {
-    // Check required fields based on brand
+    // Check required fields — subcategory is optional for every brand now,
+    // since brands are open-ended (no fixed list to key a rule off of).
     const requiredFields = ['brand', 'title', 'category', 'price', 'totalStock'];
-    
-    // Add subcategory as required for Saffron and Cornells
-    if (formData.brand === 'saffron' || formData.brand === 'cornells') {
-      requiredFields.push('subcategory');
-    }
 
     const areRequiredFieldsFilled = requiredFields.every(field => {
       const value = formData[field];
@@ -404,7 +438,7 @@ function AdminProducts() {
 
           <div className="space-y-6 py-6">
             {/* Brand Info Banner */}
-            {formData.brand && (
+            {formData.brand && ['rekker', 'saffron', 'cornells', 'biosaff'].includes(formData.brand) && (
               <div className={`p-4 rounded-lg border-2 ${
                 formData.brand === 'rekker' ? 'bg-blue-50 border-blue-200' :
                 formData.brand === 'saffron' ? 'bg-green-50 border-green-200' :
@@ -412,8 +446,9 @@ function AdminProducts() {
               }`}>
                 <p className="font-medium">
                   {formData.brand === 'rekker' && '🏢 Rekker Products'}
-                  {formData.brand === 'saffron' && '🧼 Saffron Products (Manufactured by Rekker)'}
+                  {formData.brand === 'saffron' && '🧼 Saffron Milan Products (Manufactured by Rekker)'}
                   {formData.brand === 'cornells' && '💄 Cornells Products (Distributed by Rekker)'}
+                  {formData.brand === 'biosaff' && '✨ Bio Saff Products (Rekker\'s own cosmetics line)'}
                 </p>
               </div>
             )}
@@ -465,6 +500,7 @@ function AdminProducts() {
                 buttonText={isEditMode ? "Update Product" : "Add Product"}
                 formControls={addProductFormElements}
                 isBtnDisabled={!isFormValid()}
+                dynamicSuggestions={dynamicSuggestions}
               />
             </div>
 
@@ -473,12 +509,9 @@ function AdminProducts() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <h4 className="font-medium text-yellow-800 mb-2">Form Requirements:</h4>
                 <ul className="text-sm text-yellow-700 space-y-1">
-                  <li>• Brand is required</li>
+                  <li>• Brand is required (pick an existing one, or type a new brand name)</li>
                   <li>• Title is required</li>
-                  <li>• Category is required</li>
-                  {(formData.brand === 'saffron' || formData.brand === 'cornells') && (
-                    <li>• Subcategory is required for {formData.brand}</li>
-                  )}
+                  <li>• Category is required (pick an existing one, or type a new category name)</li>
                   <li>• Price must be a valid number ≥ 0</li>
                   <li>• Stock must be a valid number ≥ 0</li>
                   <li>• At least one image (main image, extra photo, or variation) is required</li>

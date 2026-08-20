@@ -198,8 +198,9 @@ export const addProductFormElements = [
   {
     label: "Brand",
     name: "brand",
-    componentType: "select",
+    componentType: "combo",
     options: brandOptions,
+    placeholder: "Select an existing brand, or type a new one",
     required: true,
   },
   {
@@ -221,6 +222,7 @@ export const addProductFormElements = [
     name: "category",
     componentType: "select-dynamic",
     options: [],
+    placeholder: "Select an existing category, or type a new one",
     required: true,
   },
   {
@@ -228,7 +230,7 @@ export const addProductFormElements = [
     name: "subcategory",
     componentType: "select-dynamic",
     options: [],
-    showWhen: ["saffron", "cornells"],
+    placeholder: "Optional — select or type a new subcategory",
   },
   {
     label: "Price",

@@ -81,10 +81,6 @@ const ProductSchema = new mongoose.Schema(
     brand: {
       type: String,
       required: [true, "Brand is required"],
-      enum: {
-        values: ["rekker", "saffron", "cornells", "biosaff"],
-        message: "Brand must be one of rekker, saffron, cornells, biosaff"
-      },
       trim: true,
       lowercase: true
     },
@@ -222,11 +218,6 @@ ProductSchema.pre('validate', function(next) {
 
   if (!hasMainImage && !hasImagesArray && !hasVariations) {
     return next(new Error('Product must have either a main image, an images array, or at least one variation'));
-  }
-
-  // Validate subcategory requirement for legacy Saffron and Cornells string-brand products
-  if ((this.brand === 'saffron' || this.brand === 'cornells') && !this.subcategory && !this.subcategoryId) {
-    return next(new Error(`Subcategory is required for ${this.brand} products`));
   }
 
   next();

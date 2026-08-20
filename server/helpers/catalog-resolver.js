@@ -38,6 +38,31 @@ function slugify(value) {
     .replace(/(^-|-$)/g, "");
 }
 
+// Common ways someone might type a brand that already has a canonical short
+// code elsewhere in the app (static filters, category lists, admin banners)
+// — these collapse to that short code so a sheet using "Saffron Milan" or
+// "saffron-milan" lines up with existing "saffron" products instead of
+// silently forking into a second, disconnected brand bucket. Anything NOT
+// in this table is treated as a genuinely new brand and used as-is.
+const BRAND_ALIASES = {
+  "saffron-milan": "saffron",
+  "saffron milan": "saffron",
+  "bio-saff": "biosaff",
+  "bio saff": "biosaff",
+};
+
+// Normalizes any brand input (from the admin form or a bulk-import sheet)
+// to the canonical string stored on Product.brand.
+function normalizeBrandInput(rawBrand) {
+  const cleaned = String(rawBrand || "").toLowerCase().trim();
+  if (!cleaned) return "";
+  if (BRAND_ALIASES[cleaned]) return BRAND_ALIASES[cleaned];
+  // Also check the hyphen-collapsed form, in case of stray spacing/casing
+  const collapsed = cleaned.replace(/\s+/g, "-");
+  if (BRAND_ALIASES[collapsed]) return BRAND_ALIASES[collapsed];
+  return collapsed;
+}
+
 // "hair-mousse" -> "Hair Mousse", "Saffron Milan" -> "Saffron Milan"
 function humanize(value) {
   return String(value || "")
@@ -49,7 +74,7 @@ function humanize(value) {
 
 // Finds (or creates) the relational Brand doc for a legacy brand string.
 async function findOrCreateBrand(legacyBrand) {
-  const normalized = String(legacyBrand || "").toLowerCase().trim();
+  const normalized = normalizeBrandInput(legacyBrand);
   const slug = LEGACY_BRAND_SLUG[normalized] || slugify(normalized);
   if (!slug) return null;
 
@@ -171,5 +196,6 @@ module.exports = {
   resolveProductCatalogRefs,
   slugify,
   humanize,
+  normalizeBrandInput,
   LEGACY_BRAND_SLUG,
 };

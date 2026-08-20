@@ -8,13 +8,31 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { getCategoriesByBrand, getSubcategories } from "@/config";
 
-function CommonForm({ 
-  formControls, 
-  formData, 
-  setFormData, 
-  onSubmit, 
+// Merges a static {id,label} option list with a dynamically-fetched one,
+// de-duplicating by id (case-insensitive).
+function mergeOptions(staticOptions = [], dynamicOptions = []) {
+  const byId = new Map();
+  [...staticOptions, ...dynamicOptions].forEach((opt) => {
+    if (!opt?.id) return;
+    const key = String(opt.id).toLowerCase();
+    if (!byId.has(key)) byId.set(key, opt);
+  });
+  return [...byId.values()];
+}
+
+function CommonForm({
+  formControls,
+  formData,
+  setFormData,
+  onSubmit,
   buttonText,
-  isBtnDisabled 
+  isBtnDisabled,
+  // Optional: { brand: [{id,label}], category: [...], subcategory: [...] }
+  // — live-fetched suggestions (e.g. from the Brands/Categories admin
+  // collections) merged in alongside the static config lists. Purely
+  // suggestions: the underlying field is still free text, so typing
+  // something not in this list is always allowed.
+  dynamicSuggestions = {},
 }) {
   
   function renderInputsByComponentType(getControlItem) {
@@ -39,6 +57,44 @@ function CommonForm({
           />
         );
         break;
+
+      case "combo": {
+        // An open text field with a suggestions dropdown (native datalist):
+        // pick an existing value, or type a brand-new one — never blocked.
+        const listId = `${getControlItem.name}-options`;
+        const options = mergeOptions(
+          getControlItem.options,
+          dynamicSuggestions?.[getControlItem.name]
+        );
+        element = (
+          <>
+            <Input
+              name={getControlItem.name}
+              list={listId}
+              placeholder={getControlItem.placeholder || getControlItem.label}
+              id={getControlItem.name}
+              value={value}
+              onChange={(event) => {
+                const newValue = event.target.value;
+                setFormData({
+                  ...formData,
+                  [getControlItem.name]: newValue,
+                  // Reset dependent fields when brand changes
+                  ...(getControlItem.name === "brand" && { category: "", subcategory: "" }),
+                });
+              }}
+            />
+            <datalist id={listId}>
+              {options.map((optionItem) => (
+                <option key={optionItem.id} value={optionItem.id}>
+                  {optionItem.label}
+                </option>
+              ))}
+            </datalist>
+          </>
+        );
+        break;
+      }
 
       case "select":
         element = (
@@ -70,60 +126,61 @@ function CommonForm({
         );
         break;
 
-      case "select-dynamic":
-        // Get dynamic options based on brand/category
-        let dynamicOptions = [];
-        
+      case "select-dynamic": {
+        // Get dynamic options based on brand/category — merges the static,
+        // per-brand config list with any live-fetched suggestions, but
+        // (like "combo" above) the field itself stays free text: an open
+        // category list, not a closed one. This is what lets a bulk import
+        // or a manually-typed value introduce a brand-new category.
+        let staticOptions = [];
         if (getControlItem.name === "category" && formData.brand) {
-          dynamicOptions = getCategoriesByBrand(formData.brand);
+          staticOptions = getCategoriesByBrand(formData.brand);
         } else if (getControlItem.name === "subcategory" && formData.brand && formData.category) {
-          dynamicOptions = getSubcategories(formData.brand, formData.category);
+          staticOptions = getSubcategories(formData.brand, formData.category);
         }
+        const options = mergeOptions(staticOptions, dynamicSuggestions?.[getControlItem.name]);
 
-        // Check if this field should be shown (subcategory only for Saffron and Cornells)
-        if (getControlItem.showWhen && !getControlItem.showWhen.includes(formData.brand)) {
-          return null; // Don't render subcategory for Rekker
-        }
+        const disabled =
+          (getControlItem.name === "category" && !formData.brand) ||
+          (getControlItem.name === "subcategory" && !formData.category);
 
+        const listId = `${getControlItem.name}-options`;
         element = (
-          <Select
-            onValueChange={(value) => {
-              setFormData({
-                ...formData,
-                [getControlItem.name]: value,
-                // Reset subcategory when category changes
-                ...(getControlItem.name === "category" && { subcategory: "" })
-              });
-            }}
-            value={value}
-            disabled={
-              (getControlItem.name === "category" && !formData.brand) ||
-              (getControlItem.name === "subcategory" && !formData.category)
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue 
-                placeholder={
-                  getControlItem.name === "category" && !formData.brand
-                    ? "Select brand first"
-                    : getControlItem.name === "subcategory" && !formData.category
-                    ? "Select category first"
-                    : getControlItem.placeholder || getControlItem.label
-                } 
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {dynamicOptions && dynamicOptions.length > 0
-                ? dynamicOptions.map((optionItem) => (
-                    <SelectItem key={optionItem.id} value={optionItem.id}>
-                      {optionItem.label}
-                    </SelectItem>
-                  ))
-                : <SelectItem value="none" disabled>No options available</SelectItem>}
-            </SelectContent>
-          </Select>
+          <>
+            <Input
+              name={getControlItem.name}
+              list={listId}
+              disabled={disabled}
+              placeholder={
+                getControlItem.name === "category" && !formData.brand
+                  ? "Select a brand first"
+                  : getControlItem.name === "subcategory" && !formData.category
+                  ? "Select a category first"
+                  : getControlItem.placeholder || getControlItem.label
+              }
+              id={getControlItem.name}
+              value={value}
+              onChange={(event) => {
+                const newValue = event.target.value;
+                setFormData({
+                  ...formData,
+                  [getControlItem.name]: newValue,
+                  // Reset subcategory when category changes
+                  ...(getControlItem.name === "category" && { subcategory: "" })
+                });
+              }}
+            />
+            <datalist id={listId}>
+              {options.map((optionItem) => (
+                <option key={optionItem.id} value={optionItem.id}>
+                  {optionItem.label}
+                </option>
+              ))}
+            </datalist>
+          </>
         );
         break;
+      }
 
       case "textarea":
         element = (
@@ -170,7 +227,7 @@ function CommonForm({
         {formControls.map((controlItem) => {
           const element = renderInputsByComponentType(controlItem);
           
-          // Don't render if element is null (hidden field like subcategory for Rekker)
+          // Don't render if element is null (e.g. a conditionally hidden field)
           if (!element) return null;
 
           return (

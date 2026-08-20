@@ -2,7 +2,7 @@
 const XLSX = require("xlsx");
 const { imageUploadUtil } = require("../../helpers/cloudinary");
 const Product = require("../../models/Product");
-const { resolveProductCatalogRefs } = require("../../helpers/catalog-resolver");
+const { resolveProductCatalogRefs, normalizeBrandInput, slugify } = require("../../helpers/catalog-resolver");
 
 // Upload image to Cloudinary
 const handleImageUpload = async (req, res) => {
@@ -153,8 +153,6 @@ const bulkImportProducts = async (req, res) => {
       return uploadResult.secure_url || uploadResult.url;
     }
 
-    const validBrands = ["rekker", "saffron", "cornells", "biosaff"];
-
     // Process rows sequentially (not in parallel) so Cloudinary uploads
     // don't get rate-limited, and so the image cache above works correctly.
     for (let i = 0; i < rows.length; i++) {
@@ -164,23 +162,18 @@ const bulkImportProducts = async (req, res) => {
 
       try {
         const title = String(row.title || row.Title || row.ITEMS || "").trim();
-        const brand = String(row.brand || row.Brand || "").toLowerCase().trim();
-        const category = String(row.category || row.Category || "").toLowerCase().trim().replace(/\s+/g, "-");
+        const brand = normalizeBrandInput(row.brand || row.Brand || "");
+        const category = slugify(row.category || row.Category || "");
         const subcategory = row.subcategory || row.Subcategory
-          ? String(row.subcategory || row.Subcategory).toLowerCase().trim().replace(/\s+/g, "-")
+          ? slugify(row.subcategory || row.Subcategory)
           : null;
         const price = parseFloat(row.price ?? row.Price ?? 0);
         const salePrice = row.salePrice ? parseFloat(row.salePrice) : 0;
         const totalStock = parseInt(row.totalStock ?? row.stock ?? row.Stock ?? 0, 10);
 
         if (!title) throw new Error("Missing product title");
-        if (!validBrands.includes(brand)) {
-          throw new Error(`Invalid brand "${row.brand || ""}". Must be one of: ${validBrands.join(", ")}`);
-        }
+        if (!brand) throw new Error("Missing brand");
         if (!category) throw new Error("Missing category");
-        if ((brand === "saffron" || brand === "cornells") && !subcategory) {
-          throw new Error(`Subcategory is required for ${brand} products`);
-        }
         if (!price || isNaN(price)) throw new Error("Invalid or missing price");
         if (isNaN(totalStock)) throw new Error("Invalid or missing totalStock");
 
@@ -322,23 +315,10 @@ const addProduct = async (req, res) => {
       });
     }
 
-    // Validate brand
-    const validBrands = ['rekker', 'saffron', 'cornells', 'biosaff'];
-    const normalizedBrand = brand.toLowerCase().trim();
-    if (!validBrands.includes(normalizedBrand)) {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid brand. Must be one of: ${validBrands.join(', ')}`,
-      });
-    }
-
-    // Validate subcategory requirement for Saffron and Cornells
-    if ((normalizedBrand === 'saffron' || normalizedBrand === 'cornells') && !subcategory) {
-      return res.status(400).json({
-        success: false,
-        message: `Subcategory is required for ${brand} products`,
-      });
-    }
+    // Brand is now open-ended — any brand name is accepted and, via the
+    // catalogue resolver below, auto-creates the relational Brand record if
+    // it doesn't exist yet. Subcategory is optional for every brand.
+    const normalizedBrand = normalizeBrandInput(brand);
 
     // Parse the extra-images gallery (images[] on the schema) — same
     // JSON-or-array handling as variations, since it travels through the
@@ -409,8 +389,8 @@ const addProduct = async (req, res) => {
       title: title.trim(),
       description: description ? description.trim() : "",
       brand: normalizedBrand,
-      category: category.trim().toLowerCase(),
-      subcategory: subcategory ? subcategory.trim().toLowerCase() : null,
+      category: slugify(category),
+      subcategory: subcategory ? slugify(subcategory) : null,
       price: Number(price),
       salePrice: salePrice ? Number(salePrice) : 0,
       totalStock: Number(totalStock),
@@ -517,23 +497,10 @@ const editProduct = async (req, res) => {
       });
     }
 
-    // Validate brand
-    const validBrands = ['rekker', 'saffron', 'cornells', 'biosaff'];
-    const normalizedBrand = brand.toLowerCase().trim();
-    if (!validBrands.includes(normalizedBrand)) {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid brand. Must be one of: ${validBrands.join(', ')}`,
-      });
-    }
-
-    // Validate subcategory requirement for Saffron and Cornells
-    if ((normalizedBrand === 'saffron' || normalizedBrand === 'cornells') && !subcategory) {
-      return res.status(400).json({
-        success: false,
-        message: `Subcategory is required for ${brand} products`,
-      });
-    }
+    // Brand is now open-ended — any brand name is accepted and, via the
+    // catalogue resolver below, auto-creates the relational Brand record if
+    // it doesn't exist yet. Subcategory is optional for every brand.
+    const normalizedBrand = normalizeBrandInput(brand);
 
     // Parse the extra-images gallery
     let parsedImages = [];
@@ -602,8 +569,8 @@ const editProduct = async (req, res) => {
       title: title.trim(),
       description: description ? description.trim() : "",
       brand: normalizedBrand,
-      category: category.trim().toLowerCase(),
-      subcategory: subcategory ? subcategory.trim().toLowerCase() : null,
+      category: slugify(category),
+      subcategory: subcategory ? slugify(subcategory) : null,
       price: Number(price),
       salePrice: salePrice ? Number(salePrice) : 0,
       totalStock: Number(totalStock),
@@ -689,13 +656,12 @@ const deleteProduct = async (req, res) => {
 const getProductsByBrand = async (req, res) => {
   try {
     const { brand } = req.params;
-    const normalizedBrand = brand.toLowerCase().trim();
-    
-    const validBrands = ['rekker', 'saffron', 'cornells'];
-    if (!validBrands.includes(normalizedBrand)) {
+    const normalizedBrand = normalizeBrandInput(brand);
+
+    if (!normalizedBrand) {
       return res.status(400).json({
         success: false,
-        message: `Invalid brand. Must be one of: ${validBrands.join(', ')}`,
+        message: "Brand is required",
       });
     }
 
@@ -718,7 +684,7 @@ const getProductsByBrand = async (req, res) => {
 const getProductsByBrandAndCategory = async (req, res) => {
   try {
     const { brand, category } = req.params;
-    const normalizedBrand = brand.toLowerCase().trim();
+    const normalizedBrand = normalizeBrandInput(brand);
     const normalizedCategory = category.toLowerCase().trim();
 
     const products = await Product.findByBrandAndCategory(normalizedBrand, normalizedCategory)
@@ -741,7 +707,7 @@ const getProductsByBrandAndCategory = async (req, res) => {
 const getProductsByFullCategory = async (req, res) => {
   try {
     const { brand, category, subcategory } = req.params;
-    const normalizedBrand = brand.toLowerCase().trim();
+    const normalizedBrand = normalizeBrandInput(brand);
     const normalizedCategory = category.toLowerCase().trim();
     const normalizedSubcategory = subcategory ? subcategory.toLowerCase().trim() : null;
 
