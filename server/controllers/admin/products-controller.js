@@ -2,6 +2,7 @@
 const XLSX = require("xlsx");
 const { imageUploadUtil } = require("../../helpers/cloudinary");
 const Product = require("../../models/Product");
+const { resolveProductCatalogRefs } = require("../../helpers/catalog-resolver");
 
 // Upload image to Cloudinary
 const handleImageUpload = async (req, res) => {
@@ -109,6 +110,7 @@ const bulkImportProducts = async (req, res) => {
       errors: [],
       warnings: [],
       imagesUploaded: 0,
+      newCategories: [],
     };
 
     // Cache so the same filename referenced across rows/variations is only
@@ -240,6 +242,26 @@ const bulkImportProducts = async (req, res) => {
           variations,
         };
 
+        // Relational catalogue: auto-resolve (and auto-create, if new) the
+        // Brand/Category documents. This is what lets a brand-new category
+        // in the sheet (e.g. a "Milan" category that's never existed before
+        // under Saffron Milan) get created instead of rejected — the row
+        // still imports, and the category shows up in Admin > Categories
+        // and in the storefront filter right away.
+        try {
+          const catalogRefs = await resolveProductCatalogRefs({ brand, category, subcategory });
+          productData.brandId = catalogRefs.brandId;
+          productData.categoryId = catalogRefs.categoryId;
+          productData.subcategoryId = catalogRefs.subcategoryId;
+          if (catalogRefs.newCategoryNames?.length > 0) {
+            results.newCategories.push(...catalogRefs.newCategoryNames);
+          }
+        } catch (catalogError) {
+          results.warnings.push(
+            `Row ${rowNumber}: could not link brand/category records (${catalogError.message}) — product still saved with its text category`
+          );
+        }
+
         const newProduct = new Product(productData);
         await newProduct.save(); // full schema validation — no more silent placeholder fallback
         results.successful++;
@@ -252,10 +274,14 @@ const bulkImportProducts = async (req, res) => {
       }
     }
 
+    // De-dupe newCategories (the same brand-new category can appear across
+    // many rows in one import)
+    results.newCategories = [...new Set(results.newCategories)];
+
     res.json({
       success: true,
       data: results,
-      message: `Import completed: ${results.successful} successful, ${results.failed} failed, ${results.imagesUploaded} images uploaded`,
+      message: `Import completed: ${results.successful} successful, ${results.failed} failed, ${results.imagesUploaded} images uploaded, ${results.newCategories.length} new categories created`,
     });
   } catch (error) {
     console.error("Bulk import error:", error);
@@ -391,6 +417,23 @@ const addProduct = async (req, res) => {
       averageReview: averageReview ? Number(averageReview) : 0,
       variations: parsedVariations || []
     };
+
+    // Relational catalogue: auto-resolve (and auto-create, if new) the
+    // Brand/Category documents so this product shows up correctly in the
+    // Admin Categories page and on brand pages, without ever rejecting a
+    // category that doesn't exist yet.
+    try {
+      const catalogRefs = await resolveProductCatalogRefs({
+        brand: normalizedBrand,
+        category,
+        subcategory,
+      });
+      productData.brandId = catalogRefs.brandId;
+      productData.categoryId = catalogRefs.categoryId;
+      productData.subcategoryId = catalogRefs.subcategoryId;
+    } catch (catalogError) {
+      console.error("Catalogue resolve error (continuing without relational refs):", catalogError.message);
+    }
 
     console.log("Creating product with data:", {
       ...productData,
@@ -567,6 +610,19 @@ const editProduct = async (req, res) => {
       averageReview: averageReview ? Number(averageReview) : 0,
       variations: parsedVariations || []
     };
+
+    try {
+      const catalogRefs = await resolveProductCatalogRefs({
+        brand: normalizedBrand,
+        category,
+        subcategory,
+      });
+      updateData.brandId = catalogRefs.brandId;
+      updateData.categoryId = catalogRefs.categoryId;
+      updateData.subcategoryId = catalogRefs.subcategoryId;
+    } catch (catalogError) {
+      console.error("Catalogue resolve error (continuing without relational refs):", catalogError.message);
+    }
 
     const updatedProduct = await Product.findByIdAndUpdate(
       id,

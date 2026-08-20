@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Upload, Download, FileSpreadsheet, FolderArchive, CheckCircle,
-  AlertCircle, AlertTriangle, ImageIcon, X,
+  AlertCircle, AlertTriangle, ImageIcon, X, Sparkles,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -232,6 +232,14 @@ function BulkImport({ onImportComplete }) {
                   <span>Already have images hosted somewhere? Paste the full https:// URL instead of a filename — no zip needed for those</span>
                 </li>
                 <li className="flex items-start gap-2">
+                  <Sparkles className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
+                  <span>
+                    <strong>Categories are open-ended</strong> — type any category or subcategory
+                    name, even a brand-new one. It gets created automatically and linked to that
+                    brand; it never gets rejected for not existing yet.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                   <span>Brand must be: rekker, saffron, cornells, or biosaff</span>
                 </li>
@@ -272,7 +280,26 @@ function BulkImport({ onImportComplete }) {
                   <ImageIcon className="w-3 h-3 mr-1" />
                   Images uploaded: {importResults.imagesUploaded}
                 </Badge>
+                {importResults.newCategories?.length > 0 && (
+                  <Badge variant="default" className="bg-accent">
+                    <Sparkles className="w-3 h-3 mr-1" />
+                    New categories: {importResults.newCategories.length}
+                  </Badge>
+                )}
               </div>
+
+              {importResults.newCategories?.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-sm font-medium text-ink flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-accent" /> Newly created categories:
+                  </p>
+                  <ul className="text-xs text-gray-700 mt-1 space-y-1 max-h-32 overflow-y-auto">
+                    {importResults.newCategories.map((name, index) => (
+                      <li key={index}>• {name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {importResults.errors?.length > 0 && (
                 <div className="mt-3">
