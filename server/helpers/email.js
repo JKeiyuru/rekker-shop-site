@@ -23,6 +23,14 @@ const FROM_NAME = "Rekker Limited";
 const FROM_EMAIL = process.env.SMTP_USER || "info@rekker.co.ke";
 const WHATSAPP_NUMBER = "254796183064";
 
+const paymentMethodLabel = (method) => ({
+  cod: "Cash on Delivery",
+  mpesa: "M-Pesa",
+  paystack: "M-Pesa / Card (Paystack)",
+  paypal: "PayPal",
+}[method] || "Online Payment");
+
+
 // Base HTML wrapper for all emails
 const baseTemplate = (content) => `
 <!DOCTYPE html>
@@ -101,7 +109,7 @@ In addition, we import and distribute a diverse portfolio of carefully selected 
     <ul class="features">
       <li>🛒 Browse our full catalogue and add items to your cart</li>
       <li>📦 We deliver across all 47 counties in Kenya</li>
-      <li>💳 Pay via PayPal, M-Pesa, or Cash on Delivery</li>
+      <li>💳 Pay via M-Pesa, card, or Cash on Delivery</li>
       <li>🚚 Free delivery for orders within Nairobi CBD</li>
       <li>📱 Track your order status from your account dashboard</li>
       <li>💬 Reach us anytime on WhatsApp for quick support</li>
@@ -160,7 +168,7 @@ const sendOrderConfirmationEmail = async (user, order) => {
         💵 <strong>Cash on Delivery:</strong> Please have <strong>KES ${order.totalAmount?.toLocaleString()}</strong> ready when your order arrives.
        </p>`
     : `<p style="background:#dcfce7; border:1px solid #86efac; border-radius:6px; padding:12px; font-size:14px;">
-        ✅ <strong>Payment Received:</strong> Thank you for your payment via ${order.paymentMethod === "mpesa" ? "M-Pesa" : "PayPal"}. Your order is confirmed.
+        ✅ <strong>Payment Received:</strong> Thank you for your payment via ${paymentMethodLabel(order.paymentMethod)}. Your order is confirmed.
        </p>`;
 
   const itemsHtml = order.cartItems?.map(item => `
@@ -211,7 +219,7 @@ const sendOrderConfirmationEmail = async (user, order) => {
         </div>
         <div class="info-item">
           <strong>💳 Payment</strong>
-          ${order.paymentMethod === "cod" ? "Cash on Delivery" : order.paymentMethod === "mpesa" ? "M-Pesa" : "PayPal"}
+          ${paymentMethodLabel(order.paymentMethod)}
         </div>
         <div class="info-item">
           <strong>📦 Status</strong>
@@ -265,7 +273,7 @@ const sendOrderDispatchedEmail = async (user, order) => {
         </div>
         <div class="info-item">
           <strong>💳 Payment Method</strong>
-          ${order.paymentMethod === "cod" ? "Cash on Delivery" : order.paymentMethod === "mpesa" ? "M-Pesa" : "PayPal"}
+          ${paymentMethodLabel(order.paymentMethod)}
         </div>
         <div class="info-item">
           <strong>💰 Amount</strong>
@@ -351,7 +359,76 @@ const sendOrderDeliveredEmail = async (user, order) => {
 };
 
 // ─────────────────────────────────────────────
-// 5. PASSWORD RESET EMAIL
+// 5. EMAIL VERIFICATION (account / email confirmation link)
+// ─────────────────────────────────────────────
+const sendVerificationEmail = async (user, verifyLink) => {
+  const transporter = createTransporter();
+  const content = `
+    <h2>Confirm Your Email ✉️</h2>
+    <p>Hi <strong>${user.userName}</strong>, just one more step to secure your Rekker account.</p>
+
+    <div class="order-box">
+      <p style="margin:0; font-size:14px;">Click the button below to confirm <strong>${user.email}</strong> is really you.</p>
+    </div>
+
+    <p style="text-align:center; margin: 28px 0;">
+      <a href="${verifyLink}" class="btn btn-red" style="background: linear-gradient(135deg, #b91c1c, #e11d48); color:#fff; text-decoration:none;">
+        Confirm My Email
+      </a>
+    </p>
+
+    <p style="color:#888; font-size:13px;">
+      If you didn't create a Rekker account, you can safely ignore this email.
+    </p>
+  `;
+
+  await transporter.sendMail({
+    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to: user.email,
+    subject: "✉️ Confirm your email — Rekker Limited",
+    html: baseTemplate(content),
+  });
+
+  console.log("✅ Verification email sent to:", user.email);
+};
+
+// ─────────────────────────────────────────────
+// 6. EMAIL ADDRESS CHANGE VERIFICATION
+// ─────────────────────────────────────────────
+const sendEmailChangeVerification = async (newEmail, changeLink, userName) => {
+  const transporter = createTransporter();
+  const content = `
+    <h2>Confirm Your New Email 🔄</h2>
+    <p>Hi <strong>${userName}</strong>, we received a request to change the email on your Rekker account to this address (<strong>${newEmail}</strong>).</p>
+
+    <div class="order-box">
+      <p style="margin:0; font-size:14px;">Click the button below to confirm the change. This link expires in <strong>1 hour</strong>.</p>
+    </div>
+
+    <p style="text-align:center; margin: 28px 0;">
+      <a href="${changeLink}" class="btn btn-red" style="background: linear-gradient(135deg, #b91c1c, #e11d48); color:#fff; text-decoration:none;">
+        Confirm New Email
+      </a>
+    </p>
+
+    <p style="color:#888; font-size:13px;">
+      If you didn't request this change, please ignore this email — your account email will stay the same,
+      and you should reach out to us if you're concerned about your account's security.
+    </p>
+  `;
+
+  await transporter.sendMail({
+    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to: newEmail,
+    subject: "🔄 Confirm your new email — Rekker Limited",
+    html: baseTemplate(content),
+  });
+
+  console.log("✅ Email-change verification sent to:", newEmail);
+};
+
+// ─────────────────────────────────────────────
+// 7. PASSWORD RESET
 // ─────────────────────────────────────────────
 const sendPasswordResetEmail = async (email, resetLink) => {
   const transporter = createTransporter();
@@ -391,10 +468,61 @@ const sendPasswordResetEmail = async (email, resetLink) => {
   console.log("✅ Password reset email sent to:", email);
 };
 
+// ─────────────────────────────────────────────
+// 8. GENERIC ORDER STATUS UPDATE EMAIL
+//    (confirmed / inProcess / rejected / cancelled — inShipping and delivered
+//    have their own richer templates above)
+// ─────────────────────────────────────────────
+const STATUS_COPY = {
+  confirmed:  { label: "Confirmed",   color: "#16a34a", emoji: "✅", blurb: "Your order has been confirmed and our team is preparing it." },
+  inProcess:  { label: "In Process",  color: "#2563eb", emoji: "⚙️", blurb: "We're picking and packing your order right now." },
+  rejected:   { label: "Rejected",    color: "#b91c1c", emoji: "⚠️", blurb: "Unfortunately, we're unable to fulfil this order. If you've already paid, we'll process a refund — please reach out on WhatsApp if you have questions." },
+  cancelled:  { label: "Cancelled",   color: "#6b7280", emoji: "❌", blurb: "This order has been cancelled. If you've already paid, we'll process a refund — please reach out on WhatsApp if you have questions." },
+};
+
+const sendOrderStatusUpdateEmail = async (user, order) => {
+  const copy = STATUS_COPY[order.orderStatus];
+  if (!copy) return; // no template for this status (e.g. "pending") — skip silently
+
+  const transporter = createTransporter();
+  const content = `
+    <h2>Order Update ${copy.emoji}</h2>
+    <p>Hi <strong>${user.userName}</strong>, there's an update on your order.</p>
+
+    <div class="order-box">
+      <h3>Order #${order._id?.toString().slice(-8).toUpperCase()} — <span class="badge" style="background:${copy.color};">${copy.label.toUpperCase()}</span></h3>
+      <p style="font-size:14px; color:#555;">${copy.blurb}</p>
+      <div class="order-row">
+        <span>Order Total</span>
+        <span><strong>KES ${order.totalAmount?.toLocaleString()}</strong></span>
+      </div>
+    </div>
+
+    <p style="text-align:center; margin-top:24px;">
+      <a href="https://wa.me/${WHATSAPP_NUMBER}?text=Hi%20Rekker!%20I%20have%20a%20question%20about%20order%20%23${order._id?.toString().slice(-8).toUpperCase()}"
+         class="btn">
+        💬 Ask Us on WhatsApp
+      </a>
+    </p>
+  `;
+
+  await transporter.sendMail({
+    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to: user.email,
+    subject: `${copy.emoji} Order #${order._id?.toString().slice(-8).toUpperCase()} — ${copy.label}`,
+    html: baseTemplate(content),
+  });
+
+  console.log(`✅ Status update (${order.orderStatus}) email sent to:`, user.email);
+};
+
 module.exports = {
   sendWelcomeEmail,
   sendOrderConfirmationEmail,
   sendOrderDispatchedEmail,
   sendOrderDeliveredEmail,
+  sendOrderStatusUpdateEmail,
   sendPasswordResetEmail,
+  sendVerificationEmail,
+  sendEmailChangeVerification,
 };

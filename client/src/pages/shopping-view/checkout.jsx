@@ -2,9 +2,10 @@
 // Rekker multi-step checkout: Delivery → Payment → Review → Success.
 // FIXES:
 //   1. Cart is cleared in Redux state (clearCart) after every successful order.
-//   2. PayPal: cartId included in payload so cart is cleared server-side on capture.
-//   3. M-Pesa: phone normalised before sending; better error display.
-//   4. Saved addresses: users can save up to 2 addresses and select them on checkout.
+//   2. Saved addresses: users can save up to 2 addresses and select them on checkout.
+//   3. Online payments (M-Pesa, Visa/Mastercard, Airtel Money) now go through
+//      Paystack's hosted checkout instead of a direct M-Pesa STK push and a
+//      separate PayPal flow — PayPal has been removed entirely.
 
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -58,15 +59,6 @@ function extractCartItems(cartState) {
   if (Array.isArray(cartState.cartItems))                              return cartState.cartItems;
   if (cartState.cartItems && Array.isArray(cartState.cartItems.items)) return cartState.cartItems.items;
   return [];
-}
-
-// Normalise phone to 2547XXXXXXXX
-function normalisePhone(phone) {
-  const digits = String(phone).replace(/\D/g, "");
-  if (digits.startsWith("254")) return digits;
-  if (digits.startsWith("0"))   return "254" + digits.slice(1);
-  if (digits.startsWith("7") || digits.startsWith("1")) return "254" + digits;
-  return digits;
 }
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -240,7 +232,6 @@ function CheckoutPage() {
 
   // Step 2 — payment
   const [paymentMethod, setPaymentMethod] = useState("");
-  const [mpesaPhone,    setMpesaPhone]    = useState("");
 
   // Derived amounts
   const subtotal = cartItems.reduce((s, i) => {
@@ -260,11 +251,6 @@ function CheckoutPage() {
     const t = setTimeout(() => setIsPageLoading(false), 800);
     return () => clearTimeout(t);
   }, []);
-
-  // Pre-fill mpesa phone from delivery phone
-  useEffect(() => {
-    if (address.phone && !mpesaPhone) setMpesaPhone(address.phone);
-  }, [address.phone]);
 
   // ── Saved address selection ─────────────────────────────────────────────────
   const handleSelectSavedAddress = (saved) => {
@@ -334,9 +320,6 @@ function CheckoutPage() {
 
   const validatePayment = () => {
     if (!paymentMethod) { toast({ title: "Please select a payment method", variant: "destructive" }); return false; }
-    if (paymentMethod === "mpesa" && (!mpesaPhone || mpesaPhone.replace(/\D/g,"").length < 9)) {
-      toast({ title: "Please enter a valid M-Pesa number", variant: "destructive" }); return false;
-    }
     return true;
   };
 
@@ -415,40 +398,28 @@ function CheckoutPage() {
         }
       }
 
-      // ── M-PESA ──────────────────────────────────────────────────────────────
-      else if (paymentMethod === "mpesa") {
-        const normPhone = normalisePhone(mpesaPhone);
+      // ── PAYSTACK (M-Pesa / Card / Airtel Money — one hosted checkout) ────────
+      else if (paymentMethod === "paystack") {
         const res = await axios.post(
-          `${API_BASE_URL}/api/shop/order/mpesa/initiate`,
+          `${API_BASE_URL}/api/shop/paystack/initialize`,
           {
-            phone:     normPhone,
-            amount:    Math.ceil(totalAmount),
-            orderData: baseOrderPayload,
+            userId:         user?.id,
+            email:          user?.email,
+            cartItems:      baseOrderPayload.cartItems,
+            addressInfo:    baseOrderPayload.addressInfo,
+            totalAmount,
+            subtotalAmount: subtotal,
+            deliveryFee:    finalDeliveryFee,
           },
           { withCredentials: true }
         );
-        if (res.data.success) {
-          dispatch(clearCart());
-          setPlacedOrder({ ...baseOrderPayload, _id: res.data.orderId });
-          setStep(4);
-        } else {
-          throw new Error(res.data.message || "M-Pesa initiation failed");
-        }
-      }
-
-      // ── PAYPAL ──────────────────────────────────────────────────────────────
-      else if (paymentMethod === "paypal") {
-        const res = await axios.post(
-          `${API_BASE_URL}/api/shop/order/create`,
-          baseOrderPayload,
-          { withCredentials: true }
-        );
-        if (res.data.approvalURL) {
+        if (res.data.success && res.data.authorizationUrl) {
           dispatch(clearCart());
           sessionStorage.setItem("pendingOrderId", res.data.orderId);
-          window.location.href = res.data.approvalURL;
+          sessionStorage.setItem("pendingOrderReference", res.data.reference);
+          window.location.href = res.data.authorizationUrl;
         } else {
-          throw new Error(res.data.message || "Could not get PayPal payment URL");
+          throw new Error(res.data.message || "Could not start online payment");
         }
       }
 
@@ -468,9 +439,8 @@ function CheckoutPage() {
       `Hi Rekker! I just placed order #${orderId} for ${formatKES(totalAmount)}. ` +
       `Delivery to ${address.location}, ${address.subCounty}, ${address.county}. ` +
       `Payment: ${
-        paymentMethod === "cod"    ? "Cash on Delivery"
-        : paymentMethod === "mpesa"  ? "M-Pesa"
-        : "PayPal"
+        paymentMethod === "cod" ? "Cash on Delivery"
+        : "Paid Online (Paystack)"
       }.`
     );
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`;
@@ -733,18 +703,11 @@ function CheckoutPage() {
                       desc:  "Pay when your order arrives at your door",
                     },
                     {
-                      id:    "mpesa",
+                      id:    "paystack",
                       icon:  <Smartphone className="w-5 h-5 text-green-600" />,
                       bg:    "bg-green-100",
-                      title: "M-Pesa",
-                      desc:  "Pay via Lipa Na M-Pesa STK push",
-                    },
-                    {
-                      id:    "paypal",
-                      icon:  <CreditCard className="w-5 h-5 text-blue-600" />,
-                      bg:    "bg-blue-100",
-                      title: "PayPal",
-                      desc:  "Pay securely via PayPal — card or PayPal balance",
+                      title: "Pay Online",
+                      desc:  "M-Pesa, Visa/Mastercard, or Airtel Money — choose on the next screen",
                     },
                   ].map(({ id, icon, bg, title, desc }) => (
                     <button key={id}
@@ -772,24 +735,9 @@ function CheckoutPage() {
                     </button>
                   ))}
 
-                  {/* M-Pesa phone input */}
-                  {paymentMethod === "mpesa" && (
-                    <div className="ml-14 space-y-1.5">
-                      <Label>M-Pesa Phone Number</Label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <Input
-                          type="tel"
-                          placeholder="e.g. 0712 345 678"
-                          value={mpesaPhone}
-                          onChange={(e) => setMpesaPhone(e.target.value)}
-                          className="pl-9"
-                          autoFocus
-                        />
-                      </div>
-                      <p className="text-xs text-gray-400">
-                        You'll receive an STK push on this number. Enter your PIN to complete payment.
-                      </p>
+                  {paymentMethod === "paystack" && (
+                    <div className="ml-14 rounded-lg bg-green-50 border border-green-200 px-4 py-2.5 text-xs text-green-700">
+                      You'll be taken to a secure Paystack checkout to pay by M-Pesa, card, or Airtel Money.
                     </div>
                   )}
                 </div>
@@ -842,9 +790,8 @@ function CheckoutPage() {
                     <CreditCard className="w-4 h-4 text-red-600" /> Payment
                   </h3>
                   <div className="flex items-center gap-3">
-                    {paymentMethod === "cod"    && <><Wallet     className="w-4 h-4 text-orange-600" /><span className="text-sm">Cash on Delivery</span></>}
-                    {paymentMethod === "mpesa"  && <><Smartphone  className="w-4 h-4 text-green-600" /><span className="text-sm">M-Pesa — {mpesaPhone}</span></>}
-                    {paymentMethod === "paypal" && <><CreditCard  className="w-4 h-4 text-blue-600"  /><span className="text-sm">PayPal</span></>}
+                    {paymentMethod === "cod"      && <><Wallet     className="w-4 h-4 text-orange-600" /><span className="text-sm">Cash on Delivery</span></>}
+                    {paymentMethod === "paystack" && <><Smartphone  className="w-4 h-4 text-green-600" /><span className="text-sm">Pay Online — M-Pesa / Card / Airtel Money</span></>}
                   </div>
                   <button onClick={() => setStep(2)} className="text-xs text-red-600 hover:underline mt-1 block">Edit</button>
                 </div>
@@ -892,9 +839,9 @@ function CheckoutPage() {
                       💵 Please have <strong>{formatKES(totalAmount)}</strong> ready when your order arrives.
                     </p>
                   )}
-                  {paymentMethod === "mpesa" && (
+                  {paymentMethod === "paystack" && (
                     <p className="text-xs text-green-700 bg-green-50 rounded-lg p-2 mt-2">
-                      📱 An STK push will be sent to <strong>{mpesaPhone}</strong>. Enter your PIN to complete payment.
+                      🔒 You'll be redirected to Paystack's secure checkout to pay by M-Pesa, card, or Airtel Money.
                     </p>
                   )}
                 </div>
@@ -909,8 +856,8 @@ function CheckoutPage() {
                     className="flex-1 bg-red-700 hover:bg-red-800 font-bold"
                   >
                     {isSubmitting ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Placing Order...</>
-                    ) : paymentMethod === "paypal" ? "Pay with PayPal" : "Place Order"}
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {paymentMethod === "paystack" ? "Redirecting..." : "Placing Order..."}</>
+                    ) : paymentMethod === "paystack" ? "Continue to Payment" : "Place Order"}
                   </Button>
                 </div>
               </div>
@@ -938,13 +885,9 @@ function CheckoutPage() {
                 <div className={`rounded-xl p-4 text-sm ${
                   paymentMethod === "cod"
                     ? "bg-orange-50 border border-orange-200 text-orange-700"
-                    : paymentMethod === "mpesa"
-                    ? "bg-green-50 border border-green-200 text-green-700"
-                    : "bg-blue-50 border border-blue-200 text-blue-700"
+                    : "bg-green-50 border border-green-200 text-green-700"
                 }`}>
-                  {paymentMethod === "cod"    && <p>💵 Please have <strong>{formatKES(totalAmount)}</strong> ready when our team arrives. They will call <strong>{address.phone}</strong> before delivery.</p>}
-                  {paymentMethod === "mpesa"  && <p>📱 Check your phone — we sent an M-Pesa payment request to <strong>{mpesaPhone}</strong>. Enter your PIN to complete payment.</p>}
-                  {paymentMethod === "paypal" && <p>✅ Payment confirmed via PayPal. We're processing your order.</p>}
+                  {paymentMethod === "cod" && <p>💵 Please have <strong>{formatKES(totalAmount)}</strong> ready when our team arrives. They will call <strong>{address.phone}</strong> before delivery.</p>}
                 </div>
 
                 <div className="bg-gray-50 rounded-xl p-4 text-left space-y-2">

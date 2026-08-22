@@ -208,6 +208,36 @@ export const resetPassword = createAsyncThunk(
   }
 );
 
+// Send (or resend) an email verification link to the logged-in user
+export const sendVerificationEmail = createAsyncThunk(
+  "auth/sendVerificationEmail",
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/auth/send-verification-email`, {}, { withCredentials: true });
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data || { message: "Could not send verification email" });
+    }
+  }
+);
+
+// Request an email address change — sends a confirmation link to the new address
+export const requestEmailChange = createAsyncThunk(
+  "auth/requestEmailChange",
+  async (newEmail, { rejectWithValue }) => {
+    try {
+      const res = await axios.post(
+        `${API_BASE_URL}/api/auth/request-email-change`,
+        { newEmail },
+        { withCredentials: true }
+      );
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data || { message: "Could not start email change" });
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: "auth",
   initialState,

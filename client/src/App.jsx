@@ -32,6 +32,8 @@ const AuthLogin = lazy(() => import("./pages/auth/login"));
 const AuthRegister = lazy(() => import("./pages/auth/register"));
 const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
 const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
+const VerifyEmail = lazy(() => import("./pages/auth/verify-email"));
+const ConfirmEmailChange = lazy(() => import("./pages/auth/confirm-email-change"));
 
 // Admin
 const AdminDashboard = lazy(() => import("./pages/admin-view/dashboard"));
@@ -59,8 +61,6 @@ const SearchProducts = lazy(() => import("./pages/shopping-view/search"));
 // Shop - Protected
 const ShoppingCheckout = lazy(() => import("./pages/shopping-view/checkout"));
 const ShoppingAccount = lazy(() => import("./pages/shopping-view/account"));
-const PaypalReturnPage = lazy(() => import("./pages/shopping-view/paypal-return"));
-const PaypalCancelPage = lazy(() => import("./pages/shopping-view/paypal-cancel"));
 const PaymentSuccessPage = lazy(() => import("./pages/shopping-view/payment-success"));
 
 // Common
@@ -217,6 +217,8 @@ function App() {
           </Route>
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
           <Route path="/auth/reset-password" element={<ResetPassword />} />
+          <Route path="/auth/verify-email" element={<VerifyEmail />} />
+          <Route path="/auth/confirm-email-change" element={<ConfirmEmailChange />} />
 
           {/* Admin Routes */}
           <Route
@@ -272,14 +274,6 @@ function App() {
               }
             />
             <Route
-              path="paypal-return"
-              element={
-                <ProtectedRoute isAuthenticated={isAuthenticated}>
-                  <PaypalReturnPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="payment-success"
               element={
                 <ProtectedRoute isAuthenticated={isAuthenticated}>
@@ -288,15 +282,6 @@ function App() {
               }
             />
           </Route>
-
-          <Route
-            path="/paypal-cancel"
-            element={
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
-                <PaypalCancelPage />
-              </ProtectedRoute>
-            }
-          />
 
           {/* Error pages */}
           <Route path="/unauth-page" element={<UnauthPage />} />

@@ -1,8 +1,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Address from "@/components/shopping-view/address";
 import ShoppingOrders from "@/components/shopping-view/orders";
+import AccountSettings from "@/components/shopping-view/account-settings";
 import { useSelector } from "react-redux";
-import { Package, MapPin } from "lucide-react";
+import { Package, MapPin, Settings } from "lucide-react";
 
 function ShoppingAccount() {
   const { user } = useSelector((state) => state.auth);
@@ -30,12 +31,21 @@ function ShoppingAccount() {
             <TabsTrigger value="address" className="rounded-full px-5">
               <MapPin className="mr-2 h-4 w-4" /> Addresses
             </TabsTrigger>
+            <TabsTrigger value="settings" className="rounded-full px-5">
+              <Settings className="mr-2 h-4 w-4" /> Settings
+              {!user?.emailVerified && (
+                <span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-yellow-500" />
+              )}
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="orders">
             <ShoppingOrders />
           </TabsContent>
           <TabsContent value="address">
             <Address />
+          </TabsContent>
+          <TabsContent value="settings">
+            <AccountSettings />
           </TabsContent>
         </Tabs>
       </div>

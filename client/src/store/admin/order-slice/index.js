@@ -44,6 +44,20 @@ export const updateOrderStatus = createAsyncThunk(
   }
 );
 
+export const updatePaymentStatus = createAsyncThunk(
+  "/order/updatePaymentStatus",
+  async ({ id, paymentStatus }) => {
+    const response = await axios.put(
+      `${API_BASE_URL}/api/admin/orders/payment-status/${id}`,
+      {
+        paymentStatus,
+      }
+    );
+
+    return response.data;
+  }
+);
+
 const adminOrderSlice = createSlice({
   name: "adminOrderSlice",
   initialState,

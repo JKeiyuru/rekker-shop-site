@@ -44,7 +44,7 @@ const brands = [
 
 const promises = [
   { icon: Truck, title: "Countrywide delivery", copy: "Nairobi same-day, 48h upcountry." },
-  { icon: Smartphone, title: "Pay with M-Pesa", copy: "STK push, card and PayPal at checkout." },
+  { icon: Smartphone, title: "Pay with M-Pesa", copy: "STK push, card, or Airtel Money at checkout." },
   { icon: ShieldCheck, title: "Genuine products", copy: "Straight from the manufacturer." },
   { icon: Store, title: "Trade pricing", copy: "Wholesale rates for stockists." },
 ];

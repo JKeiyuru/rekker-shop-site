@@ -33,6 +33,16 @@ const UserSchema = new mongoose.Schema({
     default: "user",
     enum: ["user", "admin"],
   },
+  emailVerified: {
+    type: Boolean,
+    default: false,
+  },
+  // Set while an email-change is awaiting confirmation on the new address;
+  // cleared once the change is confirmed.
+  pendingEmail: {
+    type: String,
+    default: null,
+  },
 }, { timestamps: true });
 
 const User = mongoose.model("User", UserSchema);

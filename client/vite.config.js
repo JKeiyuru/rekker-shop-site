@@ -80,7 +80,6 @@ Sitemap: https://rekker.co.ke/sitemap.xml`;
         "/shop/checkout",             
         "/shop/account",              
         "/shop/search",               
-        "/shop/paypal-return",        
         "/shop/payment-success",      
       ],
       exclude: [

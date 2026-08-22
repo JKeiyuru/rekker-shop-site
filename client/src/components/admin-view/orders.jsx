@@ -47,9 +47,10 @@ function AdminOrdersView() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Order ID</TableHead>
+              <TableHead>Customer</TableHead>
               <TableHead>Order Date</TableHead>
               <TableHead>Order Status</TableHead>
+              <TableHead>Payment</TableHead>
               <TableHead>Order Price</TableHead>
               <TableHead>
                 <span className="sr-only">Details</span>
@@ -59,23 +60,33 @@ function AdminOrdersView() {
           <TableBody>
             {orderList && orderList.length > 0
               ? orderList.map((orderItem) => (
-                  <TableRow>
-                    <TableCell>{orderItem?._id}</TableCell>
+                  <TableRow key={orderItem?._id}>
+                    <TableCell>
+                      <div className="font-medium">{orderItem?.customerName || "Guest"}</div>
+                      <div className="text-xs text-muted-foreground">#{orderItem?._id?.slice(-8).toUpperCase()}</div>
+                    </TableCell>
                     <TableCell>{orderItem?.orderDate.split("T")[0]}</TableCell>
                     <TableCell>
                       <Badge
                         className={`py-1 px-3 ${
-                          orderItem?.orderStatus === "confirmed"
+                          orderItem?.orderStatus === "confirmed" || orderItem?.orderStatus === "delivered"
                             ? "bg-green-500"
-                            : orderItem?.orderStatus === "rejected"
+                            : orderItem?.orderStatus === "rejected" || orderItem?.orderStatus === "cancelled"
                             ? "bg-red-600"
+                            : orderItem?.orderStatus === "inShipping"
+                            ? "bg-blue-500"
                             : "bg-black"
                         }`}
                       >
                         {orderItem?.orderStatus}
                       </Badge>
                     </TableCell>
-                    <TableCell>${orderItem?.totalAmount}</TableCell>
+                    <TableCell>
+                      <Badge variant={orderItem?.paymentStatus === "paid" ? "default" : "secondary"}>
+                        {orderItem?.paymentStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>KES {orderItem?.totalAmount?.toLocaleString()}</TableCell>
                     <TableCell>
                       <Dialog
                         open={openDetailsDialog}

@@ -70,7 +70,7 @@ function StoreFooter() {
       <div className="border-t border-white/10">
         <div className="container mx-auto flex flex-col gap-2 px-4 py-6 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Rekker Limited. All rights reserved.</p>
-          <p>Secure payments via M-Pesa, card &amp; PayPal.</p>
+          <p>Secure payments via M-Pesa, card &amp; Airtel Money.</p>
         </div>
       </div>
     </footer>

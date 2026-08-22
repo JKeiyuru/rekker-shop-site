@@ -49,6 +49,7 @@ const wishlistRouter = require("./routes/shop/wishlist-routes");
 const commonFeatureRouter = require("./routes/common/feature-routes");
 const contactRouter = require("./routes/common/contact-routes");
 const mpesaRouter = require("./routes/shop/mpesa-routes");
+const paystackRouter = require("./routes/shop/paystack-routes");
 const shopBrandsRouter = require("./routes/shop/brands-routes");
 const shopCategoriesRouter = require("./routes/shop/categories-routes");
 const shopPromotionsRouter = require("./routes/shop/promotions-routes");
@@ -141,7 +142,14 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 app.use(cookieParser());
-app.use(express.json({ limit: "10mb" }));
+// `verify` stashes the raw request buffer on req.rawBody — Paystack signs the
+// exact raw bytes of the webhook body with HMAC-SHA512, and re-serializing
+// the already-parsed JSON before hashing can produce a different byte
+// sequence (key order, spacing) and fail signature verification.
+app.use(express.json({
+  limit: "10mb",
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // Rate Limiting
@@ -196,6 +204,7 @@ app.use("/api/shop/search", shopSearchRouter);
 app.use("/api/shop/review", shopReviewRouter);
 app.use("/api/shop/delivery", shopDeliveryRouter);
 app.use("/api/shop", mpesaRouter);
+app.use("/api/shop", paystackRouter);
 app.use("/api/shop/brands", shopBrandsRouter);
 app.use("/api/shop/categories", shopCategoriesRouter);
 app.use("/api/shop/promotions", shopPromotionsRouter);

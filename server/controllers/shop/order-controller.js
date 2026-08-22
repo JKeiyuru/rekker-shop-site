@@ -1,15 +1,11 @@
 // server/controllers/shop/order-controller.js
-// Rekker shop order controller — COD, M-Pesa, and PayPal.
-// KEY FIX: PayPal SDK is loaded lazily inside createPaypalPayment() only.
-//   Previously, requiring paypal-rest-sdk at the top of the file caused it to
-//   call paypal.configure() immediately. If PAYPAL_MODE / PAYPAL_CLIENT_ID /
-//   PAYPAL_CLIENT_SECRET are not set (or wrong), the SDK throws at module-load
-//   time, which crashes the ENTIRE controller — making COD and M-Pesa return
-//   500 too. Lazy-loading isolates the failure to PayPal requests only.
+// Rekker shop order controller — COD and (legacy) direct M-Pesa STK push.
+// Online card / M-Pesa / Airtel Money payments now go through Paystack —
+// see controllers/shop/paystackController.js. PayPal support has been
+// removed entirely.
 
 const Order   = require("../../models/Order");
 const Cart    = require("../../models/Cart");
-const Product = require("../../models/Product");
 const User    = require("../../models/User");
 
 let sendOrderConfirmationEmail = () => Promise.resolve();
@@ -51,24 +47,7 @@ const normalisePhone = (phone) => {
   return digits;
 };
 
-// Wrap the callback-based PayPal SDK in a Promise.
-// PayPal is required HERE (lazily) so a bad config can't crash the module.
-const createPaypalPayment = (paymentJson) => {
-  let paypal;
-  try {
-    paypal = require("../../helpers/paypal");
-  } catch (e) {
-    return Promise.reject(new Error("PayPal SDK failed to load: " + e.message));
-  }
-  return new Promise((resolve, reject) => {
-    paypal.payment.create(paymentJson, (error, paymentInfo) => {
-      if (error) reject(error);
-      else resolve(paymentInfo);
-    });
-  });
-};
-
-// ─── CREATE ORDER ─────────────────────────────────────────────────────────────
+// ─── CREATE ORDER (COD only — Paystack has its own initialize endpoint) ──────
 const createOrder = async (req, res) => {
   try {
     const {
@@ -92,103 +71,39 @@ const createOrder = async (req, res) => {
       });
     }
 
-    // ── COD ──────────────────────────────────────────────────────────────────
-    if (paymentMethod === "cod") {
-      const order = new Order({
-        userId,
-        cartId:         cartId || null,
-        cartItems,
-        addressInfo,
-        paymentMethod:  "cod",
-        paymentStatus:  "pending",
-        orderStatus:    "pending",
-        totalAmount:    Number(totalAmount),
-        subtotalAmount: Number(subtotalAmount) || 0,
-        deliveryFee:    Number(deliveryFee)    || 0,
-        orderDate:      orderDate ? new Date(orderDate) : new Date(),
-      });
-
-      await order.save();
-      console.log("✅ COD order saved:", order._id);
-
-      clearUserCart(userId, cartId);
-      fireConfirmationEmail(userId, order);
-
-      return res.status(201).json({
-        success: true,
-        message: "Order placed successfully",
-        orderId: order._id,
+    if (paymentMethod !== "cod") {
+      return res.status(400).json({
+        success: false,
+        message: paymentMethod === "paystack"
+          ? "Use POST /api/shop/paystack/initialize for online payments."
+          : `Unsupported payment method: ${paymentMethod}. Use "cod" or "paystack".`,
       });
     }
 
-    // ── PAYPAL ────────────────────────────────────────────────────────────────
-    if (paymentMethod === "paypal") {
-      const baseUrl =
-        process.env.CLIENT_BASE_URL ||
-        process.env.FRONTEND_URL    ||
-        "https://rekker.co.ke";
+    const order = new Order({
+      userId,
+      cartId:         cartId || null,
+      cartItems,
+      addressInfo,
+      paymentMethod:  "cod",
+      paymentStatus:  "pending",
+      orderStatus:    "pending",
+      totalAmount:    Number(totalAmount),
+      subtotalAmount: Number(subtotalAmount) || 0,
+      deliveryFee:    Number(deliveryFee)    || 0,
+      orderDate:      orderDate ? new Date(orderDate) : new Date(),
+    });
 
-      const paymentJson = {
-  intent: "sale",
-  payer:  { payment_method: "paypal" },
-  redirect_urls: {
-    return_url: `${baseUrl}/shop/paypal-return`,
-    cancel_url: `${baseUrl}/shop/paypal-cancel`,
-  },
-  transactions: [
-    {
-      amount: {
-        currency: "USD",
-        total:    Number(totalAmount).toFixed(2),
-      },
-      description: "Rekker order payment",
-    },
-  ],
-};
-        
+    await order.save();
+    console.log("✅ COD order saved:", order._id);
 
-      let paymentInfo;
-      try {
-        paymentInfo = await createPaypalPayment(paymentJson);
-      } catch (paypalError) {
-        console.error("PayPal error:", paypalError?.response || paypalError?.message);
-        return res.status(500).json({
-          success: false,
-          message: "PayPal payment creation failed. Check PAYPAL_MODE, PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET in your server environment.",
-        });
-      }
+    clearUserCart(userId, cartId);
+    fireConfirmationEmail(userId, order);
 
-      const order = new Order({
-        userId,
-        cartId:         cartId || null,
-        cartItems,
-        addressInfo,
-        paymentMethod:  "paypal",
-        paymentStatus:  "pending",
-        orderStatus:    "pending",
-        totalAmount:    Number(totalAmount),
-        subtotalAmount: Number(subtotalAmount) || 0,
-        deliveryFee:    Number(deliveryFee)    || 0,
-        orderDate:      orderDate ? new Date(orderDate) : new Date(),
-      });
-
-      await order.save();
-      console.log("✅ PayPal order saved:", order._id);
-
-      const approvalURL = paymentInfo.links?.find((l) => l.rel === "approval_url")?.href;
-      if (!approvalURL) {
-        return res.status(500).json({
-          success: false,
-          message: "PayPal did not return an approval URL.",
-        });
-      }
-
-      return res.status(201).json({ success: true, approvalURL, orderId: order._id });
-    }
-
-    return res.status(400).json({
-      success: false,
-      message: `Unknown payment method: ${paymentMethod}`,
+    return res.status(201).json({
+      success: true,
+      message: "Order placed successfully",
+      orderId: order._id,
     });
 
   } catch (e) {
@@ -201,38 +116,9 @@ const createOrder = async (req, res) => {
   }
 };
 
-// ─── CAPTURE PAYPAL PAYMENT ───────────────────────────────────────────────────
-const capturePayment = async (req, res) => {
-  try {
-    const { paymentId, payerId, orderId } = req.body;
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
-
-    order.paymentStatus = "paid";
-    order.orderStatus   = "confirmed";
-    order.paymentId     = paymentId;
-    order.payerId       = payerId;
-
-    for (const item of order.cartItems) {
-      const product = await Product.findById(item.productId);
-      if (product) {
-        product.totalStock = Math.max(0, product.totalStock - item.quantity);
-        await product.save();
-      }
-    }
-
-    clearUserCart(order.userId, order.cartId);
-    await order.save();
-    fireConfirmationEmail(order.userId, order);
-
-    return res.status(200).json({ success: true, message: "Payment captured", data: order });
-  } catch (e) {
-    console.error("capturePayment error:", e);
-    return res.status(500).json({ success: false, message: "Internal server error" });
-  }
-};
-
-// ─── M-PESA STK PUSH ─────────────────────────────────────────────────────────
+// ─── M-PESA STK PUSH (legacy direct Daraja integration) ──────────────────────
+// Kept for reference / fallback. The checkout UI now routes online payments
+// through Paystack instead, but this endpoint still works if ever needed.
 const initiateMpesaPayment = async (req, res) => {
   try {
     const { phone, amount, orderData } = req.body;
@@ -244,7 +130,6 @@ const initiateMpesaPayment = async (req, res) => {
       });
     }
 
-    // Load M-Pesa helper lazily for the same isolation reason as PayPal
     let createToken, stkPush;
     try {
       ({ createToken, stkPush } = require("../../helpers/mpesa"));
@@ -340,7 +225,6 @@ const getOrderDetails = async (req, res) => {
 
 module.exports = {
   createOrder,
-  capturePayment,
   initiateMpesaPayment,
   getAllOrdersByUser,
   getOrderDetails,

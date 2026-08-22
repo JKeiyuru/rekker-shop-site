@@ -1,9 +1,15 @@
 // client/src/pages/auth/reset-password.jsx
-// Reset password page — accessed via emailed link with a JWT or Firebase token
-
+// Reset password page — reached via emailed link, in one of two forms:
+//   1. Firebase accounts (the default signup path — email/password via
+//      Firebase): ?oobCode=...&mode=resetPassword — verified and applied
+//      directly against Firebase Auth via confirmPasswordReset().
+//   2. Local-only accounts (no Firebase record): ?token=... — a JWT minted
+//      by our own backend, verified via POST /api/auth/reset-password.
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import axios from "axios";
+import { verifyPasswordResetCode, confirmPasswordReset } from "firebase/auth";
+import { auth } from "@/firebase";
 import { API_BASE_URL } from "@/config/config.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,18 +23,28 @@ function ResetPasswordPage() {
   const { toast } = useToast();
 
   const token = searchParams.get("token");
+  const oobCode = searchParams.get("oobCode");
+  const isFirebaseFlow = !!oobCode;
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isVerifyingCode, setIsVerifyingCode] = useState(isFirebaseFlow);
   const [success, setSuccess] = useState(false);
-  const [tokenError, setTokenError] = useState(!token);
+  const [tokenError, setTokenError] = useState(!token && !oobCode);
+  const [resetEmail, setResetEmail] = useState(null);
 
+  // For the Firebase flow, verify the oobCode up front so we can show the
+  // "link expired" state immediately rather than waiting until submit.
   useEffect(() => {
-    if (!token) setTokenError(true);
-  }, [token]);
+    if (!oobCode) return;
+    verifyPasswordResetCode(auth, oobCode)
+      .then((email) => setResetEmail(email))
+      .catch(() => setTokenError(true))
+      .finally(() => setIsVerifyingCode(false));
+  }, [oobCode]);
 
   const passwordStrength = () => {
     if (password.length === 0) return null;
@@ -52,17 +68,24 @@ function ResetPasswordPage() {
 
     setIsLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/auth/reset-password`, {
-        token,
-        newPassword: password,
-      });
-      if (res.data.success) {
-        setSuccess(true);
-        setTimeout(() => navigate("/auth/login"), 3000);
+      if (isFirebaseFlow) {
+        await confirmPasswordReset(auth, oobCode, password);
+      } else {
+        const res = await axios.post(`${API_BASE_URL}/api/auth/reset-password`, {
+          token,
+          newPassword: password,
+        });
+        if (!res.data.success) throw new Error(res.data.message);
       }
+      setSuccess(true);
+      setTimeout(() => navigate("/auth/login"), 3000);
     } catch (err) {
-      const msg = err.response?.data?.message || "Reset failed. The link may have expired.";
-      if (msg.toLowerCase().includes("expired")) {
+      const code = err?.code || "";
+      const msg =
+        code === "auth/expired-action-code" || code === "auth/invalid-action-code"
+          ? "This reset link has expired or was already used."
+          : err.response?.data?.message || err.message || "Reset failed. The link may have expired.";
+      if (msg.toLowerCase().includes("expired") || msg.toLowerCase().includes("invalid")) {
         setTokenError(true);
       } else {
         toast({ title: msg, variant: "destructive" });
@@ -84,8 +107,16 @@ function ResetPasswordPage() {
 
         <div className="bg-white rounded-2xl shadow-lg p-8">
 
-          {/* Expired / invalid token */}
-          {tokenError && (
+          {/* Verifying oobCode */}
+          {isVerifyingCode && (
+            <div className="text-center py-8">
+              <Loader2 className="w-8 h-8 text-red-700 animate-spin mx-auto mb-3" />
+              <p className="text-sm text-gray-500">Checking your reset link...</p>
+            </div>
+          )}
+
+          {/* Expired / invalid link */}
+          {!isVerifyingCode && tokenError && (
             <div className="text-center py-4">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <XCircle className="w-8 h-8 text-red-600" />
@@ -108,7 +139,7 @@ function ResetPasswordPage() {
           )}
 
           {/* Success */}
-          {!tokenError && success && (
+          {!isVerifyingCode && !tokenError && success && (
             <div className="text-center py-4">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-8 h-8 text-green-600" />
@@ -124,7 +155,7 @@ function ResetPasswordPage() {
           )}
 
           {/* Reset form */}
-          {!tokenError && !success && (
+          {!isVerifyingCode && !tokenError && !success && (
             <>
               <div className="mb-6">
                 <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mb-4">
@@ -132,7 +163,7 @@ function ResetPasswordPage() {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">Set New Password</h2>
                 <p className="text-gray-500 mt-1 text-sm">
-                  Choose a strong password for your Rekker account.
+                  {resetEmail ? <>For <strong>{resetEmail}</strong></> : "Choose a strong password for your Rekker account."}
                 </p>
               </div>
 
@@ -191,7 +222,7 @@ function ResetPasswordPage() {
                     </button>
                   </div>
                   {confirmPassword && confirmPassword !== password && (
-                    <p className="text-xs text-red-500">Passwords don't match</p>
+                    <p className="text-xs text-red-500">Passwords don&apos;t match</p>
                   )}
                 </div>
 

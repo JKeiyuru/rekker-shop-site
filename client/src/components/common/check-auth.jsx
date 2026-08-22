@@ -33,7 +33,6 @@ function CheckAuth({ children }) {
   const protectedShopRoutes = [
     "/checkout",
     "/account",
-    "/paypal-return",
     "/payment-success"
   ];
   const isProtectedShopRoute = protectedShopRoutes.some(route => 

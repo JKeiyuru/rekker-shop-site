@@ -1,6 +1,7 @@
 // shop/server/models/Order.js
-// Shop Rekker Order Model — supports COD, M-Pesa, and PayPal payment methods,
-// plus guest checkout (no account required) and multi-brand line items.
+// Shop Rekker Order Model — supports COD and Paystack (M-Pesa / card /
+// Airtel Money) payment methods, plus guest checkout (no account required)
+// and multi-brand line items.
 
 const mongoose = require("mongoose");
 
@@ -67,7 +68,11 @@ const OrderSchema = new mongoose.Schema(
     paymentMethod: {
       type: String,
       required: true,
-      enum: ["cod", "mpesa", "paypal"],
+      // "mpesa" (direct Daraja STK) and "paypal" are kept in the enum only so
+      // existing historical orders still validate on save — new checkouts use
+      // "cod" or "paystack" (Paystack covers M-Pesa, Visa/Mastercard, and
+      // Airtel Money in one hosted checkout).
+      enum: ["cod", "mpesa", "paypal", "paystack"],
     },
 
     paymentStatus: {
@@ -89,9 +94,18 @@ const OrderSchema = new mongoose.Schema(
     paymentId: { type: String, default: null },
     payerId:   { type: String, default: null },
 
-    // M-Pesa specific
+    // M-Pesa specific (legacy direct Daraja integration)
     mpesaCheckoutId:  { type: String, default: null },
     mpesaCallbackData: { type: mongoose.Schema.Types.Mixed, default: null },
+
+    // Paystack specific
+    paystackReference: { type: String, default: null },
+    paystackChannel:   { type: String, default: null }, // "mobile_money" | "card" | "bank_transfer" | ...
+
+    // Set the moment paymentStatus transitions to "paid" — lets us fire the
+    // "thank you" email exactly once, regardless of which path (webhook,
+    // verify redirect, or manual admin update) triggers the transition.
+    paymentConfirmedAt: { type: Date, default: null },
 
     // Delivery tracking
     estimatedDeliveryDate: { type: Date, default: null },
@@ -107,6 +121,7 @@ OrderSchema.index({ userId: 1, orderDate: -1 });
 OrderSchema.index({ orderStatus: 1 });
 OrderSchema.index({ paymentStatus: 1 });
 OrderSchema.index({ mpesaCheckoutId: 1 }, { sparse: true });
+OrderSchema.index({ paystackReference: 1 }, { sparse: true });
 OrderSchema.index({ "cartItems.brandId": 1 });
 OrderSchema.index({ "customer.phone": 1 });
 OrderSchema.index({ "customer.email": 1 });

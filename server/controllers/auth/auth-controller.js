@@ -4,7 +4,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../../models/User");
-const { sendWelcomeEmail } = require("../../helpers/email");
+const { sendWelcomeEmail, sendVerificationEmail } = require("../../helpers/email");
 
 // Register (Traditional)
 const registerUser = async (req, res) => {
@@ -31,8 +31,30 @@ const registerUser = async (req, res) => {
     });
     await newUser.save();
 
-    // Send welcome email (non-blocking)
+    // Send welcome + verification emails (both non-blocking)
     sendWelcomeEmail(newUser).catch((err) => console.error("Welcome email failed:", err));
+    (async () => {
+      try {
+        if (newUser.firebaseUid) {
+          const admin = require("firebase-admin");
+          const link = await admin.auth().generateEmailVerificationLink(newUser.email, {
+            url: `${process.env.CLIENT_URL || "http://localhost:5173"}/auth/verify-email`,
+            handleCodeInApp: true,
+          });
+          await sendVerificationEmail(newUser, link);
+        } else {
+          const verifyToken = jwt.sign(
+            { id: newUser._id, email: newUser.email },
+            process.env.JWT_SECRET || "CLIENT_SECRET_KEY",
+            { expiresIn: "24h" }
+          );
+          const link = `${process.env.CLIENT_URL || "http://localhost:5173"}/auth/verify-email?token=${verifyToken}`;
+          await sendVerificationEmail(newUser, link);
+        }
+      } catch (err) {
+        console.error("Verification email failed:", err.message);
+      }
+    })();
 
     const token = jwt.sign(
       { id: newUser._id, role: newUser.role, email: newUser.email, userName: newUser.userName },
@@ -49,7 +71,7 @@ const registerUser = async (req, res) => {
       success: true,
       message: "Registration successful",
       token,
-      user: { id: newUser._id, email: newUser.email, role: newUser.role, userName: newUser.userName },
+      user: { id: newUser._id, email: newUser.email, role: newUser.role, userName: newUser.userName, emailVerified: newUser.emailVerified },
     });
   } catch (error) {
     console.error("Registration error:", error);
@@ -90,7 +112,7 @@ const loginUser = async (req, res) => {
       success: true,
       message: "Logged in successfully",
       token,
-      user: { id: user._id, email: user.email, role: user.role, userName: user.userName },
+      user: { id: user._id, email: user.email, role: user.role, userName: user.userName, emailVerified: user.emailVerified },
     });
   } catch (error) {
     console.error("Login error:", error);
