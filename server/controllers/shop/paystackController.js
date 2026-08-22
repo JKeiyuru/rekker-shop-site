@@ -100,7 +100,7 @@ const initializePaystackPayment = async (req, res) => {
     order.paystackReference = reference;
     await order.save();
 
-    const baseUrl = process.env.CLIENT_BASE_URL || process.env.FRONTEND_URL || "https://rekker.co.ke";
+    const baseUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || "https://shop.rekker.co.ke";
     const callbackUrl = `${baseUrl}/payment-success`;
 
     let init;
