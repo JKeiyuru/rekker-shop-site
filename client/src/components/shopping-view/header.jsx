@@ -27,12 +27,10 @@ const mainMenuItems = [
   { id: "contact", label: "Contact", path: "/contact" },
 ];
 
-function StoreHeader() {
+function StoreHeader({ openCartSheet, setOpenCartSheet, openWishlistSheet, setOpenWishlistSheet }) {
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   const { cartItems } = useSelector((state) => state.shopCart);
   const wishlistItems = useSelector((state) => state.shopWishlist.items || []);
-  const [openCartSheet, setOpenCartSheet] = useState(false);
-  const [openWishlistSheet, setOpenWishlistSheet] = useState(false);
   const [openMobileMenu, setOpenMobileMenu] = useState(false);
   const [query, setQuery] = useState("");
   const [mobileQuery, setMobileQuery] = useState("");
@@ -150,9 +148,13 @@ function StoreHeader() {
                   </Button>
                 </div>
               ) : (
+                // Hidden below lg: "My account" / "Logout" are already in the
+                // mobile menu sheet below, and showing this AND the hamburger
+                // crammed 5-icons-wide on a phone was what pushed the
+                // hamburger button itself out of the visible row.
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Avatar className="ml-1 h-9 w-9 cursor-pointer">
+                    <Avatar className="ml-1 hidden h-9 w-9 cursor-pointer lg:flex">
                       <AvatarFallback className="bg-ink text-ink-foreground font-semibold">
                         {user?.userName?.[0]?.toUpperCase() || "R"}
                       </AvatarFallback>

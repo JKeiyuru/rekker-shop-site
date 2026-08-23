@@ -39,6 +39,22 @@ function ProductDetailsDialog({ open, setOpen, productDetails }) {
   const wishlistItems = wishlistState?.items || [];
   const { toast } = useToast();
 
+  // Opening this dialog doesn't change the URL, so by default the phone's
+  // back button/gesture has no history entry to "consume" here — it just
+  // falls straight through to whatever page was open before the current
+  // listing (often Home), which reads as "closing this took me somewhere
+  // random." Pushing a state on open, and treating popstate as "close the
+  // dialog," makes back-button behavior match what people actually expect:
+  // one back press closes the dialog, a second one leaves the page.
+  useEffect(() => {
+    if (!open) return;
+    window.history.pushState({ productDialog: true }, "");
+    const onPopState = () => setOpen(false);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   // Check if product is in wishlist
   const isWishlisted = wishlistItems.some(
     (item) => item._id === productDetails?._id

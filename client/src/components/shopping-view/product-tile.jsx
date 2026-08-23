@@ -79,7 +79,10 @@ function ProductTile({ product, handleGetProductDetails, handleAddtoCart }) {
           <Heart className={`h-4 w-4 ${isWishlisted ? "fill-primary text-primary" : "text-ink"}`} />
         </button>
 
-        <div className="absolute inset-x-3 bottom-3 flex translate-y-3 gap-2 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+        {/* Mobile: always visible (touch devices don't have real :hover, so
+            a hover-reveal button here just meant it was invisible on
+            phones). Desktop keeps the elegant hover-reveal via lg: */}
+        <div className="absolute inset-x-3 bottom-3 flex gap-2 opacity-100 translate-y-0 transition-all duration-300 lg:opacity-0 lg:translate-y-3 lg:group-hover:translate-y-0 lg:group-hover:opacity-100">
           <Button
             size="sm"
             className="flex-1 rounded-full"

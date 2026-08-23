@@ -199,7 +199,11 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col overflow-hidden bg-white">
+    <div className="flex flex-col overflow-x-hidden bg-white">
+      {/* overflow-x-hidden (not overflow-hidden) — clipping vertical overflow
+          here silently breaks position:sticky on the header, since ANY
+          ancestor with overflow other than visible does that, even when it
+          isn't the actual scrolling container. */}
       <ScrollToTop />
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
