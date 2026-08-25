@@ -57,6 +57,7 @@ const CornellsBrand = lazy(() => import("./pages/shopping-view/brands/cornells")
 const BioSaffBrand = lazy(() => import("./pages/shopping-view/brands/bio-saff"));
 const ShoppingListing = lazy(() => import("./pages/shopping-view/listing"));
 const SearchProducts = lazy(() => import("./pages/shopping-view/search"));
+const ProductPage = lazy(() => import("./pages/shopping-view/product-page"));
 
 // Shop - Protected
 const ShoppingCheckout = lazy(() => import("./pages/shopping-view/checkout"));
@@ -257,6 +258,7 @@ function App() {
             <Route path="brands/bio-saff" element={<BioSaffBrand />} />
             <Route path="brands/biosaff" element={<Navigate to="/brands/bio-saff" replace />} />
             <Route path="products" element={<ShoppingListing />} />
+            <Route path="product/:id" element={<ProductPage />} />
             <Route path="listing" element={<Navigate to="/products" replace />} />
             <Route path="search" element={<SearchProducts />} />
 

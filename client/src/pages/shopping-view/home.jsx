@@ -10,13 +10,12 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   fetchAllFilteredProducts,
-  fetchProductDetails,
 } from "@/store/shop/products-slice";
 import { addToCart, fetchCartItems } from "@/store/shop/cart-slice";
 import { fetchWishlist } from "@/store/shop/wishlist-slice";
 import { useToast } from "@/components/ui/use-toast";
 import ProductTile from "@/components/shopping-view/product-tile";
-import ProductDetailsDialog from "@/components/shopping-view/product-details";
+import useSeo from "@/hooks/use-seo";
 
 const brands = [
   {
@@ -58,9 +57,22 @@ function ShoppingHome() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { productList, productDetails } = useSelector((state) => state.shopProducts);
+  const { productList } = useSelector((state) => state.shopProducts);
   const { user, isAuthenticated } = useSelector((state) => state.auth);
-  const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
+
+  useSeo({
+    title: "Shop Rekker Online — Saffron Milan, Bio Saff & Cornells",
+    description: "Shop toilet cleaners, hand wash, edge control and more from Saffron Milan, Bio Saff and Cornells — manufactured in Kenya, delivered nationwide with M-Pesa and card checkout.",
+    path: "/",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "Rekker",
+      url: "https://shop.rekker.co.ke",
+      logo: "https://shop.rekker.co.ke/Logo.jpg",
+      brand: ["Saffron Milan", "Bio Saff", "Cornells"],
+    },
+  });
 
   useEffect(() => {
     dispatch(fetchAllFilteredProducts({ filterParams: {}, sortParams: "price-lowtohigh" }));
@@ -69,14 +81,6 @@ function ShoppingHome() {
   useEffect(() => {
     if (user?.id) dispatch(fetchWishlist(user.id));
   }, [dispatch, user]);
-
-  useEffect(() => {
-    if (productDetails !== null) setOpenDetailsDialog(true);
-  }, [productDetails]);
-
-  function handleGetProductDetails(id) {
-    dispatch(fetchProductDetails(id));
-  }
 
   function handleAddtoCart(id) {
     if (!isAuthenticated || !user) {
@@ -188,7 +192,6 @@ function ShoppingHome() {
                 <ProductTile
                   key={product._id}
                   product={product}
-                  handleGetProductDetails={handleGetProductDetails}
                   handleAddtoCart={handleAddtoCart}
                 />
               ))
@@ -213,7 +216,6 @@ function ShoppingHome() {
                 <ProductTile
                   key={product._id}
                   product={product}
-                  handleGetProductDetails={handleGetProductDetails}
                   handleAddtoCart={handleAddtoCart}
                 />
               ))}
@@ -237,12 +239,6 @@ function ShoppingHome() {
           </Button>
         </div>
       </section>
-
-      <ProductDetailsDialog
-        open={openDetailsDialog}
-        setOpen={setOpenDetailsDialog}
-        productDetails={productDetails}
-      />
     </div>
   );
 }

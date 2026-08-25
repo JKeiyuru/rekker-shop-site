@@ -6,6 +6,7 @@ import { ArrowRight, Sparkles, Leaf, ShieldCheck, Droplets } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { fetchAllFilteredProducts } from "@/store/shop/products-slice";
 import ProductTile from "@/components/shopping-view/product-tile";
+import useSeo from "@/hooks/use-seo";
 
 const ranges = [
   { title: "Hair mousse & styling", copy: "Lightweight hold that keeps curls and coils defined all day.", icon: Sparkles },
@@ -29,6 +30,12 @@ export default function BioSaffBrand() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { productList } = useSelector((s) => s.shopProducts);
+
+  useSeo({
+    title: "Bio Saff — Premium Cosmetics & Body Care",
+    description: "Shop Bio Saff edge control, leave-in conditioners, body care and cosmetics online — delivered across Kenya with M-Pesa and card checkout.",
+    path: "/brands/bio-saff",
+  });
 
   useEffect(() => {
     dispatch(fetchAllFilteredProducts({ filterParams: {}, sortParams: "price-lowtohigh" }));

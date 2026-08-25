@@ -1,7 +1,6 @@
 /* eslint-disable react/jsx-key */
 // client/src/pages/shopping-view/listing.jsx - Fixed Filter Persistence
 import ProductFilter from "@/components/shopping-view/filter";
-import ProductDetailsDialog from "@/components/shopping-view/product-details";
 import LuxuryProductTile from "@/components/shopping-view/product-tile";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,13 +15,14 @@ import { sortOptions } from "@/config";
 import { addToCart, fetchCartItems } from "@/store/shop/cart-slice";
 import {
   fetchAllFilteredProducts,
-  fetchProductDetails,
 } from "@/store/shop/products-slice";
 import { ArrowUpDownIcon, Grid3x3, LayoutGrid, Filter, X, ShoppingBag, Package } from "lucide-react";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import useSeo from "@/hooks/use-seo";
+import { brandOptionsMap, categoryOptionsMap } from "@/config";
 
 function createSearchParamsHelper(filterParams) {
   const queryParams = [];
@@ -40,7 +40,7 @@ function createSearchParamsHelper(filterParams) {
 function ShoppingListing() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { productList, productDetails } = useSelector(
+  const { productList } = useSelector(
     (state) => state.shopProducts
   );
   const { cartItems } = useSelector((state) => state.shopCart);
@@ -48,11 +48,25 @@ function ShoppingListing() {
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState("price-lowtohigh");
   const [searchParams, setSearchParams] = useSearchParams();
-  const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
   const [gridView, setGridView] = useState("4");
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const { toast } = useToast();
+
+  // Reflects active filters in the title/description — "Saffron Toilet
+  // Cleaner — Shop Online" ranks far better for a specific search than a
+  // generic "Shop All Products" on every filtered view.
+  const activeBrandLabel = filters?.brand?.[0] ? brandOptionsMap[filters.brand[0]] : null;
+  const activeCategoryLabel = filters?.category?.[0] ? categoryOptionsMap[filters.category[0]] : null;
+  const filterLabel = [activeBrandLabel, activeCategoryLabel].filter(Boolean).join(" ");
+
+  useSeo({
+    title: filterLabel ? `${filterLabel} — Shop Online` : "Shop All Products",
+    description: filterLabel
+      ? `Shop ${filterLabel} online at Rekker — delivered across Kenya with M-Pesa and card checkout.`
+      : "Browse the full Rekker catalogue — Saffron Milan, Bio Saff and Cornells home care, beauty and personal care products, delivered across Kenya.",
+    path: "/products",
+  });
 
   const handleSort = useCallback((value) => {
     setSort(value);
@@ -80,10 +94,6 @@ function ShoppingListing() {
       return cpyFilters;
     });
   }, []);
-
-  const handleGetProductDetails = useCallback((getCurrentProductId) => {
-    dispatch(fetchProductDetails(getCurrentProductId));
-  }, [dispatch]);
 
   const handleAddtoCart = useCallback((getCurrentProductId, getTotalStock) => {
     if (!isAuthenticated || !user) {
@@ -180,10 +190,6 @@ function ShoppingListing() {
       );
     }
   }, [dispatch, sort, filters, initialLoad]);
-
-  useEffect(() => {
-    if (productDetails !== null) setOpenDetailsDialog(true);
-  }, [productDetails]);
 
   const gridClasses = {
     "3": "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
@@ -288,7 +294,6 @@ function ShoppingListing() {
                 {productList.map((productItem) => (
                   <LuxuryProductTile
                     key={productItem._id}
-                    handleGetProductDetails={handleGetProductDetails}
                     product={productItem}
                     handleAddtoCart={handleAddtoCart}
                   />
@@ -326,12 +331,6 @@ function ShoppingListing() {
           </div>
         </div>
       </div>
-
-      <ProductDetailsDialog
-        open={openDetailsDialog}
-        setOpen={setOpenDetailsDialog}
-        productDetails={productDetails}
-      />
     </div>
   );
 }

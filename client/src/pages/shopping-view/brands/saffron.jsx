@@ -3,6 +3,7 @@
 // client/src/pages/shopping-view/brands/saffron.jsx - Updated Saffron Brand Page
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import useSeo from "@/hooks/use-seo";
 import { 
   FaLeaf, 
   FaShieldAlt, 
@@ -129,6 +130,12 @@ const SaffronBrand = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [activeProduct, setActiveProduct] = useState(0);
   const navigate = useNavigate();
+
+  useSeo({
+    title: "Saffron Milan — Home Care & Personal Care",
+    description: "Shop Saffron Milan handwash, toilet cleaner, dishwashing liquid and more — Kenyan-made home and personal care, delivered nationwide with M-Pesa checkout.",
+    path: "/brands/saffron",
+  });
 
   useEffect(() => {
     setIsLoaded(true);

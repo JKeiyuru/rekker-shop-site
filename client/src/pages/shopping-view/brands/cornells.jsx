@@ -3,6 +3,7 @@
 /* eslint-disable react/no-unescaped-entities */
 // pages/brands/CornellsBrand.jsx - Updated with deep burgundy theme (#7c2724) and background images
 import { useState, useEffect, useRef } from "react";
+import useSeo from "@/hooks/use-seo";
 import { 
   FaLeaf, 
   FaHeart, 
@@ -428,6 +429,12 @@ const BrochureFlipbook = () => {
 const CornellsBrand = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [activeCollection, setActiveCollection] = useState(0);
+
+  useSeo({
+    title: "Cornells — Fragrance & Beauty",
+    description: "Shop Cornells fragrance, edge control, beauty and personal care products online — delivered across Kenya with M-Pesa and card checkout.",
+    path: "/brands/cornells",
+  });
 
   useEffect(() => {
     setIsLoaded(true);

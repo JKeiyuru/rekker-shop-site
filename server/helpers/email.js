@@ -1,27 +1,65 @@
 // server/helpers/email.js
-// Email service using Nodemailer with HostAfrica SMTP
+// Email service — sends via Brevo's HTTPS API, not SMTP.
+//
+// WHY: Render blocks outbound SMTP (ports 25/465/587) on free web services
+// as of Sept 2025 — that's a network-level block, not a credentials problem,
+// so nodemailer + SMTP simply cannot work here regardless of how it's
+// configured. Brevo's API runs over normal HTTPS (port 443), same as any
+// other API call this app makes (Paystack, Firebase, etc.), so it isn't
+// affected. Free tier: 300 emails/day, no credit card required.
+//
+// Setup: create a Brevo account, verify rekker.co.ke as a sender domain
+// (adds a couple of DNS records for SPF/DKIM), grab an API key from
+// Settings → SMTP & API → API Keys, and set BREVO_API_KEY + optionally
+// BREVO_SENDER_EMAIL in your server's environment variables.
 
-const nodemailer = require("nodemailer");
+const axios = require("axios");
 
-// Create transporter using HostAfrica SMTP settings
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "mail.rekker.co.ke",
-    port: parseInt(process.env.SMTP_PORT) || 465,
-    secure: true, // true for port 465 (SSL)
-    auth: {
-      user: process.env.SMTP_USER || "info@rekker.co.ke",
-      pass: process.env.SMTP_PASS,
-    },
-    tls: {
-      rejectUnauthorized: false, // Allow self-signed certs (common with hosting providers)
-    },
-  });
-};
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
 const FROM_NAME = "Rekker Limited";
-const FROM_EMAIL = process.env.SMTP_USER || "info@rekker.co.ke";
+const FROM_EMAIL = process.env.BREVO_SENDER_EMAIL || "info@rekker.co.ke";
 const WHATSAPP_NUMBER = "254796183064";
+
+// Drop-in replacement for nodemailer's `transporter.sendMail({ from, to,
+// subject, html })` — same argument shape, so every call site below didn't
+// need to change beyond the function name. Internally translates to
+// Brevo's { sender, to, subject, htmlContent } API shape.
+const sendViaBrevo = async ({ from, to, subject, html }) => {
+  if (!process.env.BREVO_API_KEY) {
+    console.error(`❌ BREVO_API_KEY not set — email NOT sent ("${subject}" to ${to})`);
+    return;
+  }
+
+  // `from` arrives as `"Name" <email@domain.com>` — pull it apart for
+  // Brevo's { name, email } shape.
+  const match = String(from).match(/^"?([^"<]*)"?\s*<(.+)>$/);
+  const senderName = match ? match[1].trim() : FROM_NAME;
+  const senderEmail = match ? match[2].trim() : FROM_EMAIL;
+
+  try {
+    await axios.post(
+      BREVO_API_URL,
+      {
+        sender: { name: senderName, email: senderEmail },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      },
+      {
+        headers: {
+          "api-key": process.env.BREVO_API_KEY,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        timeout: 15000,
+      }
+    );
+  } catch (err) {
+    console.error("❌ Brevo send failed:", err?.response?.data || err.message);
+    throw err;
+  }
+};
 
 const paymentMethodLabel = (method) => ({
   cod: "Cash on Delivery",
@@ -91,7 +129,6 @@ const baseTemplate = (content) => `
 // 1. WELCOME EMAIL
 // ─────────────────────────────────────────────
 const sendWelcomeEmail = async (user) => {
-  const transporter = createTransporter();
   const content = `
     <h2>Welcome to Rekker, ${user.userName}! 🎉</h2>
     <p>We're thrilled to have you join the Rekker family. Your account has been created successfully.</p>
@@ -148,7 +185,7 @@ In addition, we import and distribute a diverse portfolio of carefully selected 
     </p>
   `;
 
-  await transporter.sendMail({
+  await sendViaBrevo({
     from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
     to: user.email,
     subject: `Welcome to Rekker, ${user.userName}! 🎉`,
@@ -162,7 +199,6 @@ In addition, we import and distribute a diverse portfolio of carefully selected 
 // 2. ORDER CONFIRMATION EMAIL
 // ─────────────────────────────────────────────
 const sendOrderConfirmationEmail = async (user, order) => {
-  const transporter = createTransporter();
   const paymentNote = order.paymentMethod === "cod"
     ? `<p style="background:#fef3c7; border:1px solid #fbbf24; border-radius:6px; padding:12px; font-size:14px;">
         💵 <strong>Cash on Delivery:</strong> Please have <strong>KES ${order.totalAmount?.toLocaleString()}</strong> ready when your order arrives.
@@ -239,7 +275,7 @@ const sendOrderConfirmationEmail = async (user, order) => {
     </p>
   `;
 
-  await transporter.sendMail({
+  await sendViaBrevo({
     from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
     to: user.email,
     subject: `Order Confirmed #${order._id?.toString().slice(-8).toUpperCase()} — Rekker`,
@@ -253,7 +289,6 @@ const sendOrderConfirmationEmail = async (user, order) => {
 // 3. ORDER DISPATCHED EMAIL
 // ─────────────────────────────────────────────
 const sendOrderDispatchedEmail = async (user, order) => {
-  const transporter = createTransporter();
   const content = `
     <h2>Your Order is On Its Way! 🚚</h2>
     <p>Hi <strong>${user.userName}</strong>, great news! Your order has been dispatched and is on its way to you.</p>
@@ -298,7 +333,7 @@ const sendOrderDispatchedEmail = async (user, order) => {
     </p>
   `;
 
-  await transporter.sendMail({
+  await sendViaBrevo({
     from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
     to: user.email,
     subject: `🚚 Your Order #${order._id?.toString().slice(-8).toUpperCase()} Has Been Dispatched!`,
@@ -312,7 +347,6 @@ const sendOrderDispatchedEmail = async (user, order) => {
 // 4. ORDER DELIVERED EMAIL
 // ─────────────────────────────────────────────
 const sendOrderDeliveredEmail = async (user, order) => {
-  const transporter = createTransporter();
   const content = `
     <h2>Order Delivered Successfully! ✅</h2>
     <p>Hi <strong>${user.userName}</strong>, your order has been delivered! We hope you love your purchase. 🎉</p>
@@ -348,7 +382,7 @@ const sendOrderDeliveredEmail = async (user, order) => {
     </p>
   `;
 
-  await transporter.sendMail({
+  await sendViaBrevo({
     from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
     to: user.email,
     subject: `✅ Order #${order._id?.toString().slice(-8).toUpperCase()} Delivered — Thank You!`,
@@ -362,7 +396,6 @@ const sendOrderDeliveredEmail = async (user, order) => {
 // 5. EMAIL VERIFICATION (account / email confirmation link)
 // ─────────────────────────────────────────────
 const sendVerificationEmail = async (user, verifyLink) => {
-  const transporter = createTransporter();
   const content = `
     <h2>Confirm Your Email ✉️</h2>
     <p>Hi <strong>${user.userName}</strong>, just one more step to secure your Rekker account.</p>
@@ -382,7 +415,7 @@ const sendVerificationEmail = async (user, verifyLink) => {
     </p>
   `;
 
-  await transporter.sendMail({
+  await sendViaBrevo({
     from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
     to: user.email,
     subject: "✉️ Confirm your email — Rekker Limited",
@@ -396,7 +429,6 @@ const sendVerificationEmail = async (user, verifyLink) => {
 // 6. EMAIL ADDRESS CHANGE VERIFICATION
 // ─────────────────────────────────────────────
 const sendEmailChangeVerification = async (newEmail, changeLink, userName) => {
-  const transporter = createTransporter();
   const content = `
     <h2>Confirm Your New Email 🔄</h2>
     <p>Hi <strong>${userName}</strong>, we received a request to change the email on your Rekker account to this address (<strong>${newEmail}</strong>).</p>
@@ -417,7 +449,7 @@ const sendEmailChangeVerification = async (newEmail, changeLink, userName) => {
     </p>
   `;
 
-  await transporter.sendMail({
+  await sendViaBrevo({
     from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
     to: newEmail,
     subject: "🔄 Confirm your new email — Rekker Limited",
@@ -431,7 +463,6 @@ const sendEmailChangeVerification = async (newEmail, changeLink, userName) => {
 // 7. PASSWORD RESET
 // ─────────────────────────────────────────────
 const sendPasswordResetEmail = async (email, resetLink) => {
-  const transporter = createTransporter();
   const content = `
     <h2>Reset Your Password 🔐</h2>
     <p>We received a request to reset the password for your Rekker account associated with <strong>${email}</strong>.</p>
@@ -458,7 +489,7 @@ const sendPasswordResetEmail = async (email, resetLink) => {
     </p>
   `;
 
-  await transporter.sendMail({
+  await sendViaBrevo({
     from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
     to: email,
     subject: "Reset Your Rekker Password 🔐",
@@ -484,7 +515,6 @@ const sendOrderStatusUpdateEmail = async (user, order) => {
   const copy = STATUS_COPY[order.orderStatus];
   if (!copy) return; // no template for this status (e.g. "pending") — skip silently
 
-  const transporter = createTransporter();
   const content = `
     <h2>Order Update ${copy.emoji}</h2>
     <p>Hi <strong>${user.userName}</strong>, there's an update on your order.</p>
@@ -506,7 +536,7 @@ const sendOrderStatusUpdateEmail = async (user, order) => {
     </p>
   `;
 
-  await transporter.sendMail({
+  await sendViaBrevo({
     from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
     to: user.email,
     subject: `${copy.emoji} Order #${order._id?.toString().slice(-8).toUpperCase()} — ${copy.label}`,

@@ -12,7 +12,7 @@ function formatKES(value) {
   return `KES ${Number(value || 0).toLocaleString("en-KE")}`;
 }
 
-function ProductTile({ product, handleGetProductDetails, handleAddtoCart }) {
+function ProductTile({ product, handleAddtoCart }) {
   const dispatch = useDispatch();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -27,6 +27,13 @@ function ProductTile({ product, handleGetProductDetails, handleAddtoCart }) {
   const discount = onSale && product?.price
     ? Math.round(((product.price - product.salePrice) / product.price) * 100)
     : 0;
+
+  // Every product now has a real, dedicated, crawlable URL (/product/:id)
+  // instead of only opening inside a modal — see product-page.jsx for why
+  // that matters for search visibility.
+  function goToProduct() {
+    navigate(`/product/${product?._id}`);
+  }
 
   async function toggleWishlist(e) {
     e.stopPropagation();
@@ -45,7 +52,7 @@ function ProductTile({ product, handleGetProductDetails, handleAddtoCart }) {
 
   return (
     <article
-      onClick={() => handleGetProductDetails?.(product?._id)}
+      onClick={goToProduct}
       className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all duration-300 hover:-translate-y-1 hover:border-ink/20 hover:shadow-[0_18px_50px_-24px_rgba(0,0,0,0.45)]"
     >
       <div className="relative aspect-square overflow-hidden bg-secondary">
@@ -95,7 +102,7 @@ function ProductTile({ product, handleGetProductDetails, handleAddtoCart }) {
             size="icon"
             variant="secondary"
             className="rounded-full"
-            onClick={(e) => { e.stopPropagation(); handleGetProductDetails?.(product?._id); }}
+            onClick={(e) => { e.stopPropagation(); goToProduct(); }}
             aria-label="Quick view"
           >
             <Eye className="h-4 w-4" />

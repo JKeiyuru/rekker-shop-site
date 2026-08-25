@@ -1,10 +1,8 @@
 // client/src/pages/shopping-view/search.jsx - Enhanced Search Experience
-import ProductDetailsDialog from "@/components/shopping-view/product-details";
 import LuxuryProductTile from "@/components/shopping-view/product-tile";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { addToCart, fetchCartItems } from "@/store/shop/cart-slice";
-import { fetchProductDetails } from "@/store/shop/products-slice";
 import {
   getSearchResults,
   resetSearchResults,
@@ -14,18 +12,28 @@ import { useDispatch, useSelector } from "react-redux";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Search, X, Sparkles, TrendingUp, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import useSeo from "@/hooks/use-seo";
 
 function SearchProducts() {
   const [keyword, setKeyword] = useState("");
-  const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { searchResults } = useSelector((state) => state.shopSearch);
-  const { productDetails } = useSelector((state) => state.shopProducts);
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   const { cartItems } = useSelector((state) => state.shopCart);
   const { toast } = useToast();
+
+  // noindex: an on-site search-results page is low-value, often-duplicate
+  // content from Google's perspective (the same products already have their
+  // own indexed /product/:id pages) — indexing it can dilute rather than
+  // help rankings.
+  useSeo({
+    title: "Search Products",
+    description: "Search Rekker's full catalogue of Saffron Milan, Bio Saff and Cornells products.",
+    path: "/search",
+    noindex: true,
+  });
 
   // Popular search suggestions
   const popularSearches = [
@@ -94,14 +102,6 @@ function SearchProducts() {
       }
     });
   }
-
-  function handleGetProductDetails(getCurrentProductId) {
-    dispatch(fetchProductDetails(getCurrentProductId));
-  }
-
-  useEffect(() => {
-    if (productDetails !== null) setOpenDetailsDialog(true);
-  }, [productDetails]);
 
   const handlePopularSearch = (searchTerm) => {
     setKeyword(searchTerm);
@@ -223,7 +223,6 @@ function SearchProducts() {
                   key={item._id}
                   handleAddtoCart={handleAddtoCart}
                   product={item}
-                  handleGetProductDetails={handleGetProductDetails}
                 />
               ))}
             </div>
@@ -294,12 +293,6 @@ function SearchProducts() {
           )}
         </div>
       </div>
-
-      <ProductDetailsDialog
-        open={openDetailsDialog}
-        setOpen={setOpenDetailsDialog}
-        productDetails={productDetails}
-      />
     </div>
   );
 }
