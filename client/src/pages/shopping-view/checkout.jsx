@@ -435,13 +435,23 @@ function CheckoutPage() {
 
   const buildWhatsAppLink = () => {
     const orderId = placedOrder?._id?.toString().slice(-8).toUpperCase() || "NEW";
+
+    const itemLines = cartItems
+      .map((item) => {
+        const price = Number(item?.salePrice > 0 ? item.salePrice : item?.price) || 0;
+        const quantity = Number(item?.quantity) || 1;
+        return `• ${quantity}x ${item?.title || "Product"} — ${formatKES(price * quantity)}`;
+      })
+      .join("\n");
+
     const msg = encodeURIComponent(
-      `Hi Rekker! I just placed order #${orderId} for ${formatKES(totalAmount)}. ` +
-      `Delivery to ${address.location}, ${address.subCounty}, ${address.county}. ` +
-      `Payment: ${
-        paymentMethod === "cod" ? "Cash on Delivery"
-        : "Paid Online (Paystack)"
-      }.`
+      `Hi Rekker! I just placed order #${orderId}.\n\n` +
+      `${itemLines}\n\n` +
+      `Subtotal: ${formatKES(subtotal)}\n` +
+      `Delivery: ${finalDeliveryFee === 0 ? "Free" : formatKES(finalDeliveryFee)}\n` +
+      `Total: ${formatKES(totalAmount)}\n\n` +
+      `Payment: ${paymentMethod === "cod" ? "Cash on Delivery" : "Paid Online (Paystack)"}\n` +
+      `Delivery to: ${address.location}, ${address.subCounty}, ${address.county}`
     );
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`;
   };
