@@ -291,7 +291,8 @@ function AdminProducts() {
 
     // Validate price values
     const priceValid = formData.price && !isNaN(Number(formData.price)) && Number(formData.price) >= 0;
-    const stockValid = formData.totalStock && !isNaN(Number(formData.totalStock)) && Number(formData.totalStock) >= 0;
+    // 0 is a valid stock level (sold-out products must still be editable)
+    const stockValid = formData.totalStock !== "" && formData.totalStock !== null && formData.totalStock !== undefined && !isNaN(Number(formData.totalStock)) && Number(formData.totalStock) >= 0;
 
     return areRequiredFieldsFilled && hasImage && priceValid && stockValid;
   }

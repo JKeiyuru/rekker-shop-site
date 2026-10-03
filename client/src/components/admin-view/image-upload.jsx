@@ -170,8 +170,19 @@ function ProductImageUpload({
     <div
       className={`w-full mt-4 ${isCustomStyling ? "" : "max-w-md mx-auto"}`}
     >
-      <Label className="text-lg font-semibold mb-2 block">Upload Image</Label>
+      <Label className="text-lg font-semibold mb-2 block">{uploadedImageUrl ? "Replace Image" : "Upload Image"}</Label>
       
+      {/* Current image (shown when editing a product, and after a new upload) */}
+      {uploadedImageUrl && !imageLoadingState && (
+        <div className="mb-3 flex items-center gap-4 rounded-lg border bg-gray-50 p-3">
+          <img src={uploadedImageUrl} alt="Current product" className="h-24 w-24 rounded-md border bg-white object-cover" />
+          <div className="text-sm">
+            <p className="font-medium text-gray-800">Current main image</p>
+            <p className="text-gray-500">Upload a new one below to replace it.</p>
+          </div>
+        </div>
+      )}
+
       {/* Error Message */}
       {uploadError && (
         <div className="mb-3 text-red-600 text-sm bg-red-50 p-3 rounded-md border border-red-200">
@@ -206,7 +217,7 @@ function ProductImageUpload({
             <span>
               {imageLoadingState 
                 ? "Uploading..." 
-                : "Drag & drop or click to upload image"
+                : (uploadedImageUrl ? "Drag & drop or click to replace image" : "Drag & drop or click to upload image")
               }
             </span>
             <span className="text-xs text-gray-500 mt-1">

@@ -30,17 +30,35 @@ async function brandCondition(input) {
   return { $or: or };
 }
 
-// category slugs -> condition. Picking a main category includes everything under it.
+// category slugs -> condition, with "narrowing" behaviour:
+//   - pick only a main category            -> everything inside it
+//   - pick a main category AND some of its subcategories
+//                                          -> ONLY those subcategories (narrowed)
+//   - subcategories from several categories -> the union of all of them
+// so ticking "Hair Care" then "Shampoo" shows just shampoos, and then ticking
+// "Body Lotions" as well adds body lotions to the shampoos.
 async function categoryCondition(input) {
   const slugs = csv(input).map((s) => s.toLowerCase());
   if (!slugs.length) return null;
   const docs = await Category.find({ slug: { $in: slugs } }).select("_id slug parentId").lean();
-  const topIds = docs.filter((d) => !d.parentId).map((d) => d._id);
-  const subIds = docs.filter((d) => d.parentId).map((d) => d._id);
-  const or = [{ category: { $in: slugs } }, { subcategory: { $in: slugs } }];
-  if (topIds.length) or.push({ categoryId: { $in: topIds } });
-  if (subIds.length) or.push({ subcategoryId: { $in: subIds } });
-  return { $or: or };
+  const subs = docs.filter((d) => d.parentId);
+  const narrowedParents = new Set(subs.map((s) => String(s.parentId)));
+  const tops = docs.filter((d) => !d.parentId && !narrowedParents.has(String(d._id)));
+
+  const or = [];
+  if (tops.length) {
+    or.push({ categoryId: { $in: tops.map((t) => t._id) } });
+    or.push({ category: { $in: tops.map((t) => t.slug) } }); // older products without ids
+  }
+  if (subs.length) {
+    or.push({ subcategoryId: { $in: subs.map((s) => s._id) } });
+    or.push({ subcategory: { $in: subs.map((s) => s.slug) } });
+  }
+  // slugs that match no category document (very old links) fall back to the text fields
+  const known = new Set(docs.map((d) => d.slug));
+  const unknown = slugs.filter((s) => !known.has(s));
+  if (unknown.length) or.push({ category: { $in: unknown } }, { subcategory: { $in: unknown } });
+  return or.length ? { $or: or } : null;
 }
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

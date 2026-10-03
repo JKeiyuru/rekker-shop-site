@@ -5,17 +5,18 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
-function Row({ active, onClick, label, count, indent = false, strong = false }) {
+function Row({ active, onClick, label, count, indent = false, strong = false, partial = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${indent ? "pl-8" : ""} ${
-        active ? "bg-primary/10 font-semibold text-primary" : `text-ink hover:bg-secondary ${strong ? "font-medium" : ""}`
+        active || partial ? "bg-primary/10 font-semibold text-primary" : `text-ink hover:bg-secondary ${strong ? "font-medium" : ""}`
       }`}
     >
       <span className="flex items-center gap-2">
-        <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${active ? "border-primary bg-primary text-white" : "border-border bg-white"}`}>
+        <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${active ? "border-primary bg-primary text-white" : partial ? "border-primary bg-white text-primary" : "border-border bg-white"}`}>
+          {partial && !active && <span className="h-0.5 w-2 rounded bg-primary" />}
           {active && <svg viewBox="0 0 12 12" className="h-3 w-3"><path d="M2.5 6.2l2.2 2.2 4.8-4.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
         </span>
         {label}
@@ -48,7 +49,7 @@ export default function ProductFilter({ options, selected, onToggleCategory, onT
             return (
               <div key={c._id}>
                 <div className="flex items-center">
-                  <div className="flex-1"><Row strong active={topActive} onClick={() => onToggleCategory(c.slug)} label={c.name} count={c.count} /></div>
+                  <div className="flex-1"><Row strong active={topActive && !childActive} partial={topActive && childActive} onClick={() => onToggleCategory(c.slug)} label={c.name} count={c.count} /></div>
                   {c.children.length > 0 && (
                     <button type="button" aria-label="Show subcategories" onClick={() => setOpen((o) => ({ ...o, [c._id]: !expanded }))} className="rounded p-1.5 text-muted-foreground hover:bg-secondary">
                       {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}

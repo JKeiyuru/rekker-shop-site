@@ -1,11 +1,29 @@
 // client/src/components/admin-view/image-picker.jsx
 // Small "click to upload" image box for forms (categories, banners, bundles).
-// Uploads to the same Cloudinary endpoint the product form uses and reports
-// the final URL through onChange(url).
+// Photos are shrunk in the browser first (max 1600px, ~85% quality) so phone
+// photos never hit Cloudinary's size limit, then uploaded to the same endpoint
+// the product form uses. The real error from the server is shown if it fails.
 import { useRef, useState } from "react";
 import axios from "axios";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { API_BASE_URL } from "@/config/config.js";
+
+async function shrink(file, maxSide = 1600, quality = 0.85) {
+  if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    canvas.getContext("2d").drawImage(bmp, 0, 0, w, h);
+    const keepPng = file.type === "image/png" && file.size < 1.5 * 1024 * 1024;
+    const blob = await new Promise((res) => canvas.toBlob(res, keepPng ? "image/png" : "image/jpeg", quality));
+    if (!blob) return file;
+    const ext = keepPng ? "png" : "jpg";
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + "." + ext, { type: blob.type });
+  } catch { return file; } // very old browsers: upload the original
+}
 
 export default function ImagePicker({ value, onChange, label = "Upload image", hint, aspect = "aspect-video", className = "" }) {
   const inputRef = useRef(null);
@@ -13,21 +31,27 @@ export default function ImagePicker({ value, onChange, label = "Upload image", h
   const [error, setError] = useState("");
 
   async function pick(e) {
-    const file = e.target.files?.[0];
+    const original = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
-    if (!file.type.startsWith("image/")) return setError("Please choose an image file (JPG, PNG or WebP).");
-    if (file.size > 8 * 1024 * 1024) return setError("That image is over 8 MB. Please use a smaller one.");
+    if (!original) return;
+    if (!original.type.startsWith("image/")) return setError("Please choose an image file (JPG, PNG or WebP).");
+    if (original.size > 25 * 1024 * 1024) return setError("That image is over 25 MB. Please choose a smaller one.");
     setError("");
     setBusy(true);
     try {
+      const file = await shrink(original);
       const fd = new FormData();
       fd.append("my_file", file);
-      const { data } = await axios.post(`${API_BASE_URL}/api/admin/products/upload-image`, fd);
-      if (data?.success && data.result?.url) onChange(data.result.url);
-      else setError("Upload failed. Please try again.");
+      const { data } = await axios.post(`${API_BASE_URL}/api/admin/products/upload-image`, fd, { timeout: 60000 });
+      if (data?.success && (data.result?.secure_url || data.result?.url)) onChange(data.result.secure_url || data.result.url);
+      else setError(data?.message || "Upload failed. Please try again.");
     } catch (err) {
-      setError(err.response?.data?.message || "Upload failed. Please try again.");
+      const status = err.response?.status;
+      setError(
+        status === 401 || status === 403 ? "Your session expired — please log in again."
+        : err.code === "ECONNABORTED" ? "The upload took too long. Check your connection and try again."
+        : err.response?.data?.message || "Upload failed. Please try again."
+      );
     } finally {
       setBusy(false);
     }
@@ -39,6 +63,7 @@ export default function ImagePicker({ value, onChange, label = "Upload image", h
       {value ? (
         <div className={`relative ${aspect} rounded-lg overflow-hidden border bg-gray-50`}>
           <img src={value} alt="" className="w-full h-full object-cover" />
+          {busy && <div className="absolute inset-0 grid place-items-center bg-white/70"><Loader2 className="w-6 h-6 animate-spin" /></div>}
           <button type="button" onClick={() => onChange("")} className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-black" aria-label="Remove image">
             <X className="w-4 h-4" />
           </button>

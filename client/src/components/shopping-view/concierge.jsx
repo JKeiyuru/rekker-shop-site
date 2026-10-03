@@ -263,7 +263,7 @@ export default function Concierge() {
     return n;
   };
 
-  const hidden = pathname.startsWith("/admin") || pathname.startsWith("/auth");
+  const hidden = pathname.startsWith("/admin") || pathname.startsWith("/auth") || pathname.includes("checkout");
   if (hidden) return null;
 
   return (

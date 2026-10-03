@@ -30,9 +30,9 @@ function AdminProductTile({
       productLine: product.productLine || "",
       status: product.status || "active",
       images: product.images || [],
-      price: product.price || "",
+      price: product.price ?? "",
       salePrice: product.salePrice || "",
-      totalStock: product.totalStock || "",
+      totalStock: product.totalStock ?? "",
       averageReview: product.averageReview || 0,
       variations: product.variations ? product.variations.map(v => ({
         image: v.image,

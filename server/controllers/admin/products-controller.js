@@ -17,9 +17,9 @@ const handleImageUpload = async (req, res) => {
     });
   } catch (error) {
     console.error("Image upload error:", error);
-    res.json({
+    res.status(500).json({
       success: false,
-      message: "Error occurred during image upload",
+      message: `Image upload failed: ${error?.message || error?.error?.message || "unknown error"}`,
     });
   }
 };
@@ -633,6 +633,9 @@ const editProduct = async (req, res) => {
       console.error("Catalogue resolve error (continuing without relational refs):", catalogError.message);
     }
 
+    // Never blank out the existing category text if it couldn't be worked out
+    if (!updateData.category) { delete updateData.category; delete updateData.subcategory; }
+
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
       updateData,
@@ -662,7 +665,7 @@ const editProduct = async (req, res) => {
     console.error("Edit Product Error:", error);
     res.status(500).json({
       success: false,
-      message: "Error occurred while editing product",
+      message: error.name === "ValidationError" ? `Product could not be saved: ${Object.values(error.errors || {}).map((e) => e.message).join("; ")}` : "Error occurred while editing product",
       error: error.message,
     });
   }
