@@ -112,8 +112,8 @@ function ProductTile({ product, handleAddtoCart }) {
 
       <div className="flex flex-1 flex-col gap-2 p-4">
         <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          {brandOptionsMap[product?.brand] || product?.brand}
-          {product?.category ? ` · ${categoryOptionsMap[product.category] || product.category}` : ""}
+          {product?.brandId?.name || brandOptionsMap[product?.brand] || product?.brand}
+          {(product?.categoryId?.name || product?.category) ? ` · ${product?.categoryId?.name || categoryOptionsMap[product.category] || product.category}` : ""}
         </p>
         <h3 className="line-clamp-2 font-display text-base font-semibold leading-snug text-ink">
           {product?.title}

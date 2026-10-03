@@ -5,10 +5,9 @@
 // to the relational Brand/Category collections used by the admin catalogue
 // pages and brand overview pages.
 //
-// The core rule: this NEVER rejects an unrecognized category. If a brand or
-// category doesn't exist yet, it's created on the fly and linked up —
-// that's what lets bulk import (or the admin form) introduce a brand-new
-// category without needing anyone to pre-create it first.
+// Brands are still created on the fly (a new brand name just works).
+// Categories are NOT created on the fly any more — they are shared shelves
+// managed in Admin → Categories; see resolveProductCatalogRefs below.
 const Brand = require("../models/Brand");
 const Category = require("../models/Category");
 
@@ -97,102 +96,81 @@ async function findOrCreateBrand(legacyBrand) {
   }
 }
 
-// Finds (or creates) a Category doc for a brand + name (+ optional parent
-// for subcategories), auto-linking it to the brand. Returns
-// { doc, created } so callers can report when a brand-new category was
-// introduced (e.g. during a bulk import).
-async function findOrCreateCategory({ brand, rawValue, parentId = null }) {
-  if (!rawValue) return { doc: null, created: false };
+// Resolves the category for a product — INDEPENDENT of brand.
+//
+// Categories are shared shelves (Hair Care, Home Care & Hygiene …). We match
+// what was typed/uploaded against the real category list (slug or name), then
+// against the standard shelves and the old per-brand ids. If nothing fits the
+// product goes to "Uncategorised" and is reported, instead of silently
+// inventing a new junk category like the old behaviour did.
+//
+// Accepts either explicit ids (from the admin form's dropdowns) or text
+// (from bulk import / old clients).
+const { resolveCategoryText, ensureStandardCategories, UNCATEGORISED } = require("./catalog-taxonomy");
+
+async function resolveProductCatalogRefs({ brand, category, subcategory, categoryId, subcategoryId, title }) {
   const brandDoc = await findOrCreateBrand(brand);
-  if (!brandDoc) return { doc: null, created: false };
+  const unplacedNotes = [];
+  let catDoc = null;
+  let subDoc = null;
+  let productLine = "";
 
-  const baseSlug = slugify(rawValue);
-  if (!baseSlug) return { doc: null, created: false };
-  const displayName = humanize(rawValue);
-
-  // Prefer an existing category already linked to this brand (same parent
-  // level) with a matching slug or name — this is the common case for every
-  // import after the first one.
-  const existing = await Category.findOne({
-    brandIds: brandDoc._id,
-    parentId: parentId || null,
-    $or: [{ slug: baseSlug }, { name: new RegExp(`^${displayName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }],
-  });
-  if (existing) return { doc: existing, created: false };
-
-  // Category.slug is globally unique, but the same category name can
-  // legitimately exist under different brands (e.g. "Shampoo" for both
-  // Saffron Milan and Cornells) — so if the plain slug is already taken by
-  // a different brand's category, namespace it with the brand's slug
-  // instead of failing the import.
-  const attempts = [baseSlug, `${brandDoc.slug}-${baseSlug}`];
-  let lastError = null;
-  for (const candidateSlug of attempts) {
-    try {
-      const created = await Category.create({
-        name: displayName,
-        slug: candidateSlug,
-        parentId: parentId || null,
-        brandIds: [brandDoc._id],
-        isActive: true,
-      });
-      return { doc: created, created: true };
-    } catch (err) {
-      if (err.code !== 11000) throw err;
-      lastError = err;
-      // Someone may have created this exact slug in the meantime — check
-      // before falling through to the namespaced retry.
-      const raceWinner = await Category.findOne({ slug: candidateSlug });
-      if (raceWinner && raceWinner.brandIds.some((id) => String(id) === String(brandDoc._id))) {
-        return { doc: raceWinner, created: false };
-      }
+  // 1) Explicit ids win (admin form dropdowns)
+  if (categoryId) {
+    catDoc = await Category.findById(categoryId);
+    if (catDoc && catDoc.parentId) {
+      // someone passed a subcategory as the main category — normalise
+      subDoc = catDoc;
+      catDoc = await Category.findById(catDoc.parentId);
     }
   }
-  throw lastError || new Error(`Could not create category "${rawValue}"`);
-}
-
-// Convenience wrapper: resolve brandId/categoryId/subcategoryId together for
-// one product row. Never throws for an unrecognized category/subcategory —
-// only throws for genuine DB errors. `newCategoryNames` collects a
-// human-readable label for every category/subcategory that was newly
-// created by this call, so callers (e.g. bulk import) can report it.
-async function resolveProductCatalogRefs({ brand, category, subcategory }) {
-  const brandDoc = await findOrCreateBrand(brand);
-  const newCategoryNames = [];
-
-  let categoryResult = { doc: null, created: false };
-  if (category) {
-    categoryResult = await findOrCreateCategory({ brand, rawValue: category });
-    if (categoryResult.created) {
-      newCategoryNames.push(`${categoryResult.doc.name} (${LEGACY_BRAND_NAME[brand] || brand})`);
+  if (subcategoryId) {
+    const maybeSub = await Category.findById(subcategoryId);
+    if (maybeSub && (!catDoc || String(maybeSub.parentId) === String(catDoc._id))) {
+      subDoc = maybeSub;
+      if (!catDoc && maybeSub.parentId) catDoc = await Category.findById(maybeSub.parentId);
     }
   }
 
-  let subcategoryResult = { doc: null, created: false };
-  if (subcategory) {
-    subcategoryResult = await findOrCreateCategory({
-      brand,
-      rawValue: subcategory,
-      parentId: categoryResult.doc ? categoryResult.doc._id : null,
-    });
-    if (subcategoryResult.created) {
-      newCategoryNames.push(
-        `${subcategoryResult.doc.name} (under ${categoryResult.doc?.name || "—"}, ${LEGACY_BRAND_NAME[brand] || brand})`
-      );
+  // 2) Otherwise understand the text
+  if (!catDoc) {
+    const text = category || subcategory || "";
+    const r = await resolveCategoryText(text, { title });
+    catDoc = r.category;
+    subDoc = r.subcategory || null;
+    productLine = r.productLine || "";
+    if (r.unplaced) {
+      unplacedNotes.push(text ? `"${text}"` : "(no category given)");
     }
+    // A separate subcategory text can still refine within the chosen shelf
+    if (catDoc && !subDoc && subcategory && subcategory !== category) {
+      const sr = await resolveCategoryText(subcategory, { title });
+      if (sr.subcategory && String(sr.subcategory.parentId) === String(catDoc._id)) subDoc = sr.subcategory;
+      else if (sr.category && sr.category.parentId && String(sr.category.parentId) === String(catDoc._id)) subDoc = sr.category;
+    }
+  }
+
+  if (!catDoc) {
+    const docs = await ensureStandardCategories([UNCATEGORISED.slug]);
+    catDoc = docs[UNCATEGORISED.slug];
+    unplacedNotes.push("(could not determine a category)");
   }
 
   return {
     brandId: brandDoc ? brandDoc._id : null,
-    categoryId: categoryResult.doc ? categoryResult.doc._id : null,
-    subcategoryId: subcategoryResult.doc ? subcategoryResult.doc._id : null,
-    newCategoryNames,
+    categoryId: catDoc ? catDoc._id : null,
+    subcategoryId: subDoc ? subDoc._id : null,
+    categorySlug: catDoc ? catDoc.slug : "",
+    subcategorySlug: subDoc ? subDoc.slug : null,
+    productLine,
+    unplacedNotes,
+    // kept for the bulk-import report which listed "newly created" categories
+    newCategoryNames: [],
   };
 }
 
 module.exports = {
   findOrCreateBrand,
-  findOrCreateCategory,
   resolveProductCatalogRefs,
   slugify,
   humanize,

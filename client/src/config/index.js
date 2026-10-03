@@ -270,6 +270,16 @@ export const shoppingViewHeaderMenuItems = [
     path: "/about",
   },
   {
+    id: "deals",
+    label: "Deals",
+    path: "/deals",
+  },
+  {
+    id: "wholesale",
+    label: "Wholesale",
+    path: "/wholesale",
+  },
+  {
     id: "services",
     label: "Services",
     path: "/services",
@@ -283,6 +293,21 @@ export const shoppingViewHeaderMenuItems = [
 
 // CATEGORY OPTIONS MAP
 export const categoryOptionsMap = {
+  // Standard shop categories (brand-independent)
+  "hair-care": "Hair Care",
+  "body-care": "Body Care",
+  "face-skin-care": "Face & Skin Care",
+  "baby-kids": "Baby & Kids",
+  "home-care-hygiene": "Home Care & Hygiene",
+  "mens-care": "Men's Care",
+  "gift-sets": "Gift Sets",
+  "stationery": "Stationery & School",
+  "toys-games": "Toys & Games",
+  "kitchenware": "Kitchen & Dining",
+  "bags-luggage": "Bags & Luggage",
+  "hardware-security": "Hardware & Security",
+  "party-items": "Party & Celebration",
+  "uncategorised": "Uncategorised",
   // Rekker
   "stationery": "Stationery",
   "bags-suitcases": "Bags & Suitcases", 
@@ -315,6 +340,33 @@ export const categoryOptionsMap = {
 
 // SUBCATEGORY OPTIONS MAP - UNIQUE IDs WITH CATEGORY CONTEXT
 export const subcategoryOptionsMap = {
+  // Standard shop subcategories
+  "shampoo": "Shampoo",
+  "conditioners": "Conditioner & Leave-In",
+  "hair-treatments": "Hair Treatments & Masks",
+  "hair-styling": "Styling, Mousse & Edge Care",
+  "hair-oils-serums": "Hair Oils, Serums & Mists",
+  "body-lotions-creams": "Body Lotions & Creams",
+  "body-butter-oils": "Body Butter & Oils",
+  "shower-gels-scrubs": "Shower Gels & Scrubs",
+  "deodorants": "Deodorants & Anti-Perspirants",
+  "body-mists-fragrance": "Body Mists & Fragrance",
+  "face-wash": "Face Wash & Cleansers",
+  "face-moisturizers": "Face Moisturisers & Creams",
+  "face-masks-scrubs": "Face Masks & Scrubs",
+  "face-serums": "Face Serums & Treatments",
+  "baby-wash-shampoo": "Baby Wash & Shampoo",
+  "baby-lotions-creams": "Baby Lotions, Oils & Creams",
+  "nappy-rash-care": "Nappy Rash Care",
+  "kids-hair-care": "Kids Hair Care",
+  "hand-wash": "Hand Wash",
+  "dishwashing": "Dishwashing Liquid",
+  "laundry-detergent": "Laundry Detergent",
+  "toilet-bathroom-cleaners": "Toilet & Bathroom Cleaners",
+  "aftershave": "After-Shave",
+  "soft-toys": "Soft Toys & Teddy Bears",
+  "educational-toys": "Educational Toys",
+  "padlocks": "Padlocks",
   // Saffron - Home Care & Hygiene
   "home-care-hygiene-handwash": "Handwash",
   "home-care-hygiene-dishwashing": "Dishwashing Liquid", 
@@ -399,6 +451,8 @@ export const filterOptions = {
 
 // Sort Options
 export const sortOptions = [
+  { id: "newest", label: "Newest first" },
+  { id: "bestsellers", label: "Best sellers" },
   { id: "price-lowtohigh", label: "Price: Low to High" },
   { id: "price-hightolow", label: "Price: High to Low" },
   { id: "title-atoz", label: "Title: A to Z" },

@@ -7,6 +7,8 @@
 const Order   = require("../../models/Order");
 const Cart    = require("../../models/Cart");
 const User    = require("../../models/User");
+const { priceOrderLines, resolveDeliveryFee, deductStockForOrder } = require("../../helpers/order-pricing");
+const { notifyNewOrder, notifyLowStock } = require("../../helpers/notifications");
 
 let sendOrderConfirmationEmail = () => Promise.resolve();
 try {
@@ -48,26 +50,18 @@ const normalisePhone = (phone) => {
 };
 
 // ─── CREATE ORDER (COD only — Paystack has its own initialize endpoint) ──────
+// The browser only tells us WHICH items and HOW MANY. Prices, bundle
+// contents, stock and the delivery fee are all worked out here.
 const createOrder = async (req, res) => {
   try {
-    const {
-      userId,
-      cartItems,
-      addressInfo,
-      paymentMethod,
-      totalAmount,
-      subtotalAmount,
-      deliveryFee,
-      orderDate,
-      cartId,
-    } = req.body;
+    const { userId, cartItems, addressInfo, paymentMethod, deliveryFee, orderDate, cartId } = req.body;
 
-    console.log(`📦 createOrder — method: ${paymentMethod}, user: ${userId}, total: ${totalAmount}`);
+    console.log(`📦 createOrder — method: ${paymentMethod}, user: ${userId}`);
 
-    if (!userId || !cartItems?.length || !paymentMethod || totalAmount === undefined) {
+    if (!userId || !cartItems?.length || !paymentMethod) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: userId, cartItems, paymentMethod, totalAmount",
+        message: "Missing required fields: userId, cartItems, paymentMethod",
       });
     }
 
@@ -80,30 +74,57 @@ const createOrder = async (req, res) => {
       });
     }
 
+    const priced = await priceOrderLines(cartItems);
+    if (priced.errors.length || !priced.lines.length) {
+      return res.status(409).json({
+        success: false,
+        message: priced.errors[0] || "Your cart is empty.",
+        errors: priced.errors,
+      });
+    }
+
+    const finalDeliveryFee = await resolveDeliveryFee(addressInfo, deliveryFee);
+
     const order = new Order({
       userId,
       cartId:         cartId || null,
-      cartItems,
+      cartItems:      priced.lines,
       addressInfo,
       paymentMethod:  "cod",
       paymentStatus:  "pending",
       orderStatus:    "pending",
-      totalAmount:    Number(totalAmount),
-      subtotalAmount: Number(subtotalAmount) || 0,
-      deliveryFee:    Number(deliveryFee)    || 0,
+      subtotalAmount: priced.subtotal,
+      deliveryFee:    finalDeliveryFee,
+      totalAmount:    priced.subtotal + finalDeliveryFee,
       orderDate:      orderDate ? new Date(orderDate) : new Date(),
     });
 
+    // Reserve the stock now — a COD order is a real order from this moment.
+    const touched = await deductStockForOrder(order);
+    order.adminNotifiedAt = new Date();
     await order.save();
     console.log("✅ COD order saved:", order._id);
 
     clearUserCart(userId, cartId);
     fireConfirmationEmail(userId, order);
 
+    // Tell the team (dashboard bell + email + optional SMS) — never blocks the customer
+    User.findById(userId).select("userName").lean()
+      .then((u) => notifyNewOrder(order, u?.userName))
+      .catch(() => notifyNewOrder(order));
+    notifyLowStock(touched);
+
     return res.status(201).json({
       success: true,
       message: "Order placed successfully",
       orderId: order._id,
+      order: {
+        _id: order._id,
+        totalAmount: order.totalAmount,
+        subtotalAmount: order.subtotalAmount,
+        deliveryFee: order.deliveryFee,
+        cartItems: order.cartItems,
+      },
     });
 
   } catch (e) {
@@ -216,6 +237,9 @@ const getOrderDetails = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    if (req.user?.role !== "admin" && String(order.userId) !== String(req.user?.id)) {
+      return res.status(403).json({ success: false, message: "You can only view your own orders." });
+    }
     return res.status(200).json({ success: true, data: order });
   } catch (e) {
     console.error("getOrderDetails error:", e);

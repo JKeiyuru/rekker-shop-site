@@ -61,6 +61,11 @@ const adminPromotionsRouter = require("./routes/admin/promotions-routes");
 const adminBundlesRouter = require("./routes/admin/bundles-routes");
 const adminArticlesRouter = require("./routes/admin/articles-routes");
 const adminAnalyticsRouter = require("./routes/admin/analytics-routes");
+const adminBannersRouter = require("./routes/admin/banners-routes");
+const adminNotificationsRouter = require("./routes/admin/notifications-routes");
+const shopBannersRouter = require("./routes/shop/banners-routes");
+const wholesaleRouter = require("./routes/common/wholesale-routes");
+const { adminOnly } = require("./middleware/admin");
 
 const app = express();
 
@@ -185,6 +190,8 @@ app.use((req, res, next) => {
 app.use("/api/auth", authRouter);
 
 // Admin
+// Every /api/admin route now requires a logged-in admin
+app.use("/api/admin", ...adminOnly);
 app.use("/api/admin/products", adminProductsRouter);
 app.use("/api/admin/orders", adminOrderRouter);
 app.use("/api/admin/delivery-locations", adminDeliveryLocationsRouter);
@@ -194,6 +201,8 @@ app.use("/api/admin/promotions", adminPromotionsRouter);
 app.use("/api/admin/bundles", adminBundlesRouter);
 app.use("/api/admin/articles", adminArticlesRouter);
 app.use("/api/admin/analytics", adminAnalyticsRouter);
+app.use("/api/admin/banners", adminBannersRouter);
+app.use("/api/admin/notifications", adminNotificationsRouter);
 
 // Shop
 app.use("/api/shop/products", shopProductsRouter);
@@ -210,11 +219,13 @@ app.use("/api/shop/categories", shopCategoriesRouter);
 app.use("/api/shop/promotions", shopPromotionsRouter);
 app.use("/api/shop/bundles", shopBundlesRouter);
 app.use("/api/shop/articles", shopArticlesRouter);
+app.use("/api/shop/banners", shopBannersRouter);
 
 // Wishlist & Common
 app.use("/api/wishlist", wishlistRouter);
 app.use("/api/common/feature", commonFeatureRouter);
 app.use("/api/contact", contactRouter);
+app.use("/api/wholesale", wholesaleRouter);
 
 // Health Check
 app.get("/health", (req, res) => res.status(200).send("OK"));

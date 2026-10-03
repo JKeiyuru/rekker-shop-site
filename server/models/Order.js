@@ -39,6 +39,20 @@ const OrderSchema = new mongoose.Schema(
         brandName: { type: String, default: null },
 
         selectedVariation: { type: String, default: null },
+
+        // Bundle deals: one order line that stands for several products.
+        // price is the bundle price; bundleItems lists what is inside so the
+        // warehouse knows what to pack and stock can be deducted per product.
+        isBundle:    { type: Boolean, default: false },
+        bundleId:    { type: String, default: null },
+        bundleItems: [
+          {
+            _id: false,
+            productId: { type: String },
+            title:     { type: String },
+            qty:       { type: Number },
+          },
+        ],
       },
     ],
 
@@ -107,14 +121,24 @@ const OrderSchema = new mongoose.Schema(
     // verify redirect, or manual admin update) triggers the transition.
     paymentConfirmedAt: { type: Date, default: null },
 
+    // One-time flags so a retry/webhook can never double-deduct stock or
+    // double-alert the admins.
+    stockDeducted:   { type: Boolean, default: false },
+    adminNotifiedAt: { type: Date, default: null },
+
     // Delivery tracking
     estimatedDeliveryDate: { type: Date, default: null },
     actualDeliveryDate:    { type: Date, default: null },
     trackingNumber:        { type: String, default: null },
     deliveryNotes:         { type: String, default: null },
   },
-  { timestamps: true }
+  { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
+
+// Short human-friendly reference used in emails, alerts and WhatsApp messages
+OrderSchema.virtual("orderRef").get(function () {
+  return "#" + String(this._id).slice(-8).toUpperCase();
+});
 
 // Indexes for query performance
 OrderSchema.index({ userId: 1, orderDate: -1 });

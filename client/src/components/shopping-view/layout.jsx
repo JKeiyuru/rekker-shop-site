@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import StoreHeader from "./header";
 import StoreFooter from "./footer";
 import MobileBottomNav from "./mobile-bottom-nav";
+import { AnnouncementBar } from "./ad-banners";
 
 function ShoppingLayout() {
   // Lifted here (rather than living only inside the header) so the mobile
@@ -13,6 +14,7 @@ function ShoppingLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <AnnouncementBar />
       <StoreHeader
         openCartSheet={openCartSheet}
         setOpenCartSheet={setOpenCartSheet}

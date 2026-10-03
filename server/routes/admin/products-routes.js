@@ -161,8 +161,8 @@ router.get("/bulk-import-template", (req, res) => {
       {
         "title": "Brazilian Keratin Shampoo – 1000ML",
         "brand": "cornells",
-        "category": "super-foods",
-        "subcategory": "shampoo",
+        "category": "Hair Care",
+        "subcategory": "Shampoo",
         "description": "Brazilian Keratin Shampoo – 1000ML (Cornells Series)",
         "sku": "COR-BKS-1000",
         "price": "985.99",
@@ -176,8 +176,8 @@ router.get("/bulk-import-template", (req, res) => {
       {
         "title": "Bio Saff Curl Activator",
         "brand": "biosaff",
-        "category": "curl-activator",
-        "subcategory": "",
+        "category": "Hair Care",
+        "subcategory": "Styling, Mousse & Edge Care",
         "description": "Defines and holds curls all day",
         "sku": "BS-CA-250",
         "price": "650",

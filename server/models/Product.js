@@ -194,6 +194,10 @@ const ProductSchema = new mongoose.Schema(
     ogImage: { type: String, trim: true, default: null },
     isNewArrival: { type: Boolean, default: false },
     salesCount: { type: Number, default: 0, min: 0 },
+    // Optional "range" inside a brand (e.g. Cornells → "Super Foods",
+    // "Dark & Beautiful"). Ranges used to be mistaken for categories; they are
+    // now a plain label shown on the product, not a filter.
+    productLine: { type: String, trim: true, default: "" },
   },
   {
     timestamps: true,
@@ -243,6 +247,20 @@ ProductSchema.virtual('displayImage').get(function() {
   return null;
 });
 
+// Friendly names, available whenever brandId/categoryId have been populated
+ProductSchema.virtual('categoryName').get(function() {
+  const c = this.categoryId;
+  return c && typeof c === 'object' && c.name ? c.name : undefined;
+});
+ProductSchema.virtual('subcategoryName').get(function() {
+  const c = this.subcategoryId;
+  return c && typeof c === 'object' && c.name ? c.name : undefined;
+});
+ProductSchema.virtual('brandName').get(function() {
+  const b = this.brandId;
+  return b && typeof b === 'object' && b.name ? b.name : undefined;
+});
+
 // Virtual for brand display name
 ProductSchema.virtual('brandDisplay').get(function() {
   const brandMap = {
@@ -263,6 +281,9 @@ ProductSchema.index({ createdAt: -1 });
 ProductSchema.index({ isNewArrival: 1 });
 ProductSchema.index({ salesCount: -1 });
 ProductSchema.index({ title: 'text', description: 'text' });
+ProductSchema.index({ status: 1, categoryId: 1 });
+ProductSchema.index({ status: 1, subcategoryId: 1 });
+ProductSchema.index({ status: 1, brandId: 1 });
 
 // Static method to get products by brand
 ProductSchema.statics.findByBrand = function(brand) {

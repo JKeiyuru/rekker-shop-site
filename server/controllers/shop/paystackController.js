@@ -10,6 +10,8 @@ const Cart = require("../../models/Cart");
 const Product = require("../../models/Product");
 const User = require("../../models/User");
 const { initializeTransaction, verifyTransaction, verifyWebhookSignature } = require("../../helpers/paystack");
+const { priceOrderLines, resolveDeliveryFee, deductStockForOrder } = require("../../helpers/order-pricing");
+const { notifyNewOrder, notifyLowStock } = require("../../helpers/notifications");
 
 let sendOrderConfirmationEmail = () => Promise.resolve();
 try {
@@ -37,27 +39,26 @@ const finalizeSuccessfulPayment = async (order, { channel } = {}) => {
   order.paymentConfirmedAt = new Date();
   if (channel) order.paystackChannel = channel;
 
-  for (const item of order.cartItems) {
-    try {
-      const product = await Product.findById(item.productId);
-      if (product) {
-        product.totalStock = Math.max(0, product.totalStock - item.quantity);
-        await product.save();
-      }
-    } catch (e) {
-      console.error("Stock decrement error (non-fatal):", e.message);
-    }
-  }
+  // Deduct stock exactly once (bundles deduct each component product)
+  const touched = await deductStockForOrder(order);
 
+  const shouldAlertAdmins = !order.adminNotifiedAt;
+  if (shouldAlertAdmins) order.adminNotifiedAt = new Date();
   await order.save();
   clearUserCart(order.userId, order.cartId);
 
+  let customerName;
   try {
     const user = await User.findById(order.userId).select("email userName");
+    customerName = user?.userName;
     if (user) sendOrderConfirmationEmail(user, order).catch((e) => console.error("Confirmation email failed:", e));
   } catch (e) {
     console.error("User lookup for confirmation email failed:", e.message);
   }
+
+  // Alert the team only now that the money is in — unpaid/abandoned checkouts are not orders
+  if (shouldAlertAdmins) notifyNewOrder(order, customerName);
+  notifyLowStock(touched);
 
   return order;
 };
@@ -66,12 +67,12 @@ const finalizeSuccessfulPayment = async (order, { channel } = {}) => {
 // POST /api/shop/paystack/initialize
 const initializePaystackPayment = async (req, res) => {
   try {
-    const { userId, cartItems, addressInfo, totalAmount, subtotalAmount, deliveryFee, cartId, email } = req.body;
+    const { userId, cartItems, addressInfo, deliveryFee, cartId, email } = req.body;
 
-    if (!userId || !cartItems?.length || totalAmount === undefined) {
+    if (!userId || !cartItems?.length) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: userId, cartItems, totalAmount",
+        message: "Missing required fields: userId, cartItems",
       });
     }
 
@@ -81,17 +82,29 @@ const initializePaystackPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: "No email on file for this account — please add one before paying online." });
     }
 
+    // Prices, bundles, stock and delivery fee are decided here, never by the browser
+    const priced = await priceOrderLines(cartItems);
+    if (priced.errors.length || !priced.lines.length) {
+      return res.status(409).json({
+        success: false,
+        message: priced.errors[0] || "Your cart is empty.",
+        errors: priced.errors,
+      });
+    }
+    const finalDeliveryFee = await resolveDeliveryFee(addressInfo, deliveryFee);
+    const totalAmount = priced.subtotal + finalDeliveryFee;
+
     const order = new Order({
       userId,
       cartId: cartId || null,
-      cartItems,
+      cartItems: priced.lines,
       addressInfo,
       paymentMethod: "paystack",
       paymentStatus: "pending",
       orderStatus: "pending",
-      totalAmount: Number(totalAmount),
-      subtotalAmount: Number(subtotalAmount) || 0,
-      deliveryFee: Number(deliveryFee) || 0,
+      totalAmount,
+      subtotalAmount: priced.subtotal,
+      deliveryFee: finalDeliveryFee,
       orderDate: new Date(),
     });
     await order.save();

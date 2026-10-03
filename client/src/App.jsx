@@ -44,6 +44,11 @@ const AdminDelivery = lazy(() => import("./pages/admin-view/delivery-locations")
 const AdminMessages = lazy(() => import("./pages/admin-view/messages"));
 const AdminBrands = lazy(() => import("./pages/admin-view/brands"));
 const AdminCategories = lazy(() => import("./pages/admin-view/categories"));
+const AdminBundles = lazy(() => import("./pages/admin-view/bundles"));
+const AdminBanners = lazy(() => import("./pages/admin-view/banners"));
+const AdminWholesale = lazy(() => import("./pages/admin-view/wholesale"));
+const Wholesale = lazy(() => import("./pages/shopping-view/wholesale"));
+const Deals = lazy(() => import("./pages/shopping-view/deals"));
 
 // Shop - Public
 const LuxuryHome = lazy(() => import("./pages/shopping-view/home"));
@@ -242,6 +247,9 @@ function App() {
             <Route path="delivery-locations" element={<AdminDelivery />} />
             <Route path="brands" element={<AdminBrands />} />
             <Route path="categories" element={<AdminCategories />} />
+            <Route path="bundles" element={<AdminBundles />} />
+            <Route path="banners" element={<AdminBanners />} />
+            <Route path="wholesale" element={<AdminWholesale />} />
           </Route>
 
           {/* Shopping Routes — public by default */}
@@ -252,6 +260,8 @@ function App() {
             <Route path="services" element={<Services />} />
             <Route path="distributors" element={<Distributors />} />
             <Route path="contact" element={<Contact />} />
+            <Route path="wholesale" element={<Wholesale />} />
+            <Route path="deals" element={<Deals />} />
             <Route path="brands" element={<BrandsOverview />} />
             <Route path="brands/saffron" element={<SaffronBrand />} />
             <Route path="brands/cornells" element={<CornellsBrand />} />

@@ -6,10 +6,11 @@ const {
   deleteFeatureImage,
 } = require("../../controllers/common/feature-controller");
 
+const { adminOnly } = require("../../middleware/admin");
 const router = express.Router();
 
-router.post("/add", addFeatureImage);
+router.post("/add", ...adminOnly, addFeatureImage);
 router.get("/get", getFeatureImages);
-router.delete("/delete/:id", deleteFeatureImage);
+router.delete("/delete/:id", ...adminOnly, deleteFeatureImage);
 
 module.exports = router;

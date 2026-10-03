@@ -163,10 +163,10 @@ const bulkImportProducts = async (req, res) => {
       try {
         const title = String(row.title || row.Title || row.ITEMS || "").trim();
         const brand = normalizeBrandInput(row.brand || row.Brand || "");
-        const category = slugify(row.category || row.Category || "");
-        const subcategory = row.subcategory || row.Subcategory
-          ? slugify(row.subcategory || row.Subcategory)
-          : null;
+        // Keep the text exactly as typed ("Hair Care", "hair-care", an old id…);
+        // the resolver below matches it to a real category.
+        const category = String(row.category || row.Category || "").trim();
+        const subcategory = String(row.subcategory || row.Subcategory || "").trim() || null;
         const price = parseFloat(row.price ?? row.Price ?? 0);
         const salePrice = row.salePrice ? parseFloat(row.salePrice) : 0;
         const totalStock = parseInt(row.totalStock ?? row.stock ?? row.Stock ?? 0, 10);
@@ -242,12 +242,18 @@ const bulkImportProducts = async (req, res) => {
         // still imports, and the category shows up in Admin > Categories
         // and in the storefront filter right away.
         try {
-          const catalogRefs = await resolveProductCatalogRefs({ brand, category, subcategory });
+          const catalogRefs = await resolveProductCatalogRefs({ brand, category, subcategory, title });
           productData.brandId = catalogRefs.brandId;
           productData.categoryId = catalogRefs.categoryId;
           productData.subcategoryId = catalogRefs.subcategoryId;
-          if (catalogRefs.newCategoryNames?.length > 0) {
-            results.newCategories.push(...catalogRefs.newCategoryNames);
+          if (catalogRefs.categorySlug) productData.category = catalogRefs.categorySlug;
+          productData.subcategory = catalogRefs.subcategorySlug || null;
+          if (catalogRefs.productLine) productData.productLine = catalogRefs.productLine;
+          productData.stock = totalStock;
+          if (catalogRefs.unplacedNotes?.length > 0) {
+            results.warnings.push(
+              `Row ${rowNumber}: category ${catalogRefs.unplacedNotes.join(", ")} didn't match any shop category — saved under "Uncategorised". Fix it from Admin → Products → Edit.`
+            );
           }
         } catch (catalogError) {
           results.warnings.push(
@@ -300,6 +306,12 @@ const addProduct = async (req, res) => {
       brand,
       category,
       subcategory,
+      categoryId,
+      subcategoryId,
+      productLine,
+      status,
+      isNewArrival,
+      shortDescription,
       price,
       salePrice,
       totalStock,
@@ -308,7 +320,7 @@ const addProduct = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!title || !brand || !category || price === undefined || totalStock === undefined) {
+    if (!title || !brand || (!category && !categoryId) || price === undefined || totalStock === undefined) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields: title, brand, category, price, and totalStock are required",
@@ -389,14 +401,19 @@ const addProduct = async (req, res) => {
       title: title.trim(),
       description: description ? description.trim() : "",
       brand: normalizedBrand,
-      category: slugify(category),
+      category: slugify(category || ""),
       subcategory: subcategory ? slugify(subcategory) : null,
+      shortDescription: shortDescription ? String(shortDescription).trim() : "",
       price: Number(price),
       salePrice: salePrice ? Number(salePrice) : 0,
       totalStock: Number(totalStock),
+      stock: Number(totalStock),
       averageReview: averageReview ? Number(averageReview) : 0,
       variations: parsedVariations || []
     };
+    if (productLine !== undefined) productData.productLine = String(productLine || "").trim();
+    if (status && ["draft", "active", "archived"].includes(status)) productData.status = status;
+    if (isNewArrival !== undefined) productData.isNewArrival = isNewArrival === true || isNewArrival === "true";
 
     // Relational catalogue: auto-resolve (and auto-create, if new) the
     // Brand/Category documents so this product shows up correctly in the
@@ -407,10 +424,17 @@ const addProduct = async (req, res) => {
         brand: normalizedBrand,
         category,
         subcategory,
+        categoryId,
+        subcategoryId,
+        title,
       });
       productData.brandId = catalogRefs.brandId;
       productData.categoryId = catalogRefs.categoryId;
       productData.subcategoryId = catalogRefs.subcategoryId;
+      // keep the text fields (used by old links) in step with the real category
+      if (catalogRefs.categorySlug) productData.category = catalogRefs.categorySlug;
+      productData.subcategory = catalogRefs.subcategorySlug || null;
+      if (catalogRefs.productLine && productLine === undefined) productData.productLine = catalogRefs.productLine;
     } catch (catalogError) {
       console.error("Catalogue resolve error (continuing without relational refs):", catalogError.message);
     }
@@ -482,6 +506,12 @@ const editProduct = async (req, res) => {
       brand,
       category,
       subcategory,
+      categoryId,
+      subcategoryId,
+      productLine,
+      status,
+      isNewArrival,
+      shortDescription,
       price,
       salePrice,
       totalStock,
@@ -490,7 +520,7 @@ const editProduct = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!title || !brand || !category || price === undefined || totalStock === undefined) {
+    if (!title || !brand || (!category && !categoryId) || price === undefined || totalStock === undefined) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields: title, brand, category, price, and totalStock are required",
@@ -569,24 +599,36 @@ const editProduct = async (req, res) => {
       title: title.trim(),
       description: description ? description.trim() : "",
       brand: normalizedBrand,
-      category: slugify(category),
+      category: slugify(category || ""),
       subcategory: subcategory ? slugify(subcategory) : null,
+      shortDescription: shortDescription ? String(shortDescription).trim() : "",
       price: Number(price),
       salePrice: salePrice ? Number(salePrice) : 0,
       totalStock: Number(totalStock),
+      stock: Number(totalStock),
       averageReview: averageReview ? Number(averageReview) : 0,
       variations: parsedVariations || []
     };
+    if (productLine !== undefined) updateData.productLine = String(productLine || "").trim();
+    if (status && ["draft", "active", "archived"].includes(status)) updateData.status = status;
+    if (isNewArrival !== undefined) updateData.isNewArrival = isNewArrival === true || isNewArrival === "true";
 
     try {
       const catalogRefs = await resolveProductCatalogRefs({
         brand: normalizedBrand,
         category,
         subcategory,
+        categoryId,
+        subcategoryId,
+        title,
       });
       updateData.brandId = catalogRefs.brandId;
       updateData.categoryId = catalogRefs.categoryId;
       updateData.subcategoryId = catalogRefs.subcategoryId;
+      // keep the text fields (used by old links) in step with the real category
+      if (catalogRefs.categorySlug) updateData.category = catalogRefs.categorySlug;
+      updateData.subcategory = catalogRefs.subcategorySlug || null;
+      if (catalogRefs.productLine && productLine === undefined) updateData.productLine = catalogRefs.productLine;
     } catch (catalogError) {
       console.error("Catalogue resolve error (continuing without relational refs):", catalogError.message);
     }

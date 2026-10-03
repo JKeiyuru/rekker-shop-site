@@ -10,6 +10,9 @@ import {
   Mail,
   Tag,
   FolderTree,
+  Megaphone,
+  Package,
+  Store,
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,6 +42,21 @@ const navItems = [
     label: "Orders",
     path: "/admin/orders",
     icon: ClipboardList,
+  },
+  {
+    label: "Bundle Deals",
+    path: "/admin/bundles",
+    icon: Package,
+  },
+  {
+    label: "Ads & Banners",
+    path: "/admin/banners",
+    icon: Megaphone,
+  },
+  {
+    label: "Wholesale Requests",
+    path: "/admin/wholesale",
+    icon: Store,
   },
   {
     label: "Messages",

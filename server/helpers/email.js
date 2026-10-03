@@ -209,7 +209,9 @@ const sendOrderConfirmationEmail = async (user, order) => {
 
   const itemsHtml = order.cartItems?.map(item => `
     <div class="order-row">
-      <span>${item.title} × ${item.quantity}</span>
+      <span>${item.title} × ${item.quantity}${item.isBundle && item.bundleItems?.length
+        ? `<br/><span style="font-size:12px;color:#888;">Includes: ${item.bundleItems.map((b) => `${b.qty}× ${b.title}`).join(", ")}</span>`
+        : ""}</span>
       <span>KES ${(item.price * item.quantity).toLocaleString()}</span>
     </div>
   `).join("") || "";
@@ -546,7 +548,56 @@ const sendOrderStatusUpdateEmail = async (user, order) => {
   console.log(`✅ Status update (${order.orderStatus}) email sent to:`, user.email);
 };
 
+// ─────────────────────────────────────────────
+// ADMIN ALERTS + WHOLESALE ACKNOWLEDGEMENT
+// ─────────────────────────────────────────────
+const escapeHtml = (v) =>
+  String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Plain "something needs attention" email to the Rekker team.
+// `rows` is an array of [label, value] pairs shown as a small table.
+const sendAdminAlertEmail = async ({ to, subject, heading, intro, rows = [], ctaLabel, ctaUrl }) => {
+  const rowsHtml = rows
+    .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "")
+    .map(([k, v]) => `<div class="order-row"><span style="color:#888;">${escapeHtml(k)}</span><span style="text-align:right;max-width:65%;">${escapeHtml(v)}</span></div>`)
+    .join("");
+
+  const content = `
+    <h2>${escapeHtml(heading)}</h2>
+    ${intro ? `<p>${escapeHtml(intro)}</p>` : ""}
+    ${rowsHtml ? `<div class="order-box">${rowsHtml}</div>` : ""}
+    ${ctaUrl ? `<p style="text-align:center;"><a class="btn btn-red" href="${escapeHtml(ctaUrl)}">${escapeHtml(ctaLabel || "Open in dashboard")}</a></p>` : ""}
+  `;
+
+  await sendViaBrevo({
+    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to,
+    subject,
+    html: baseTemplate(content),
+  });
+};
+
+// Thank-you note to someone who submitted the wholesale form
+const sendWholesaleAckEmail = async (request) => {
+  const content = `
+    <h2>We've received your wholesale request</h2>
+    <p>Hi <strong>${escapeHtml(request.contactName)}</strong>, thank you for your interest in stocking Rekker brands at <strong>${escapeHtml(request.businessName)}</strong>.</p>
+    <p>Our trade team will review your request and get back to you within <strong>1–2 working days</strong> with pricing, minimum order quantities and delivery options for your area.</p>
+    <p>Need us sooner? Message us on WhatsApp:</p>
+    <p style="text-align:center;"><a class="btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=Hi%20Rekker!%20I%20just%20sent%20a%20wholesale%20request%20for%20${encodeURIComponent(request.businessName)}.">💬 Chat on WhatsApp</a></p>
+  `;
+  await sendViaBrevo({
+    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to: request.email,
+    subject: "We've received your wholesale request — Rekker",
+    html: baseTemplate(content),
+  });
+};
+
 module.exports = {
+  sendAdminAlertEmail,
+  sendWholesaleAckEmail,
+  escapeHtml,
   sendWelcomeEmail,
   sendOrderConfirmationEmail,
   sendOrderDispatchedEmail,

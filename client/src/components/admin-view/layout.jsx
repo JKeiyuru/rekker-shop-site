@@ -6,7 +6,8 @@ import { useDispatch } from "react-redux";
 import { logoutUser } from "@/store/auth-slice";
 import AdminSidebar from "./sidebar";
 import { Button } from "@/components/ui/button";
-import { LogOut, Bell } from "lucide-react";
+import { LogOut } from "lucide-react";
+import NotificationBell from "./notification-bell";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 
@@ -34,9 +35,7 @@ function AdminLayout() {
             <p className="font-semibold text-gray-900">{user?.userName || "Admin"}</p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon">
-              <Bell className="w-5 h-5 text-gray-500" />
-            </Button>
+            <NotificationBell />
             <Button
               variant="outline"
               size="sm"

@@ -50,33 +50,6 @@ const About = () => {
     }
   ];
 
-  // Leadership team
-  const leadership = [
-    {
-      name: "John Kamau",
-      position: "Chief Executive Officer",
-      image: "/api/placeholder/300/400",
-      bio: "Over 15 years of experience in manufacturing and distribution across East Africa"
-    },
-    {
-      name: "Sarah Wanjiku",
-      position: "Chief Operations Officer",
-      image: "/api/placeholder/300/400",
-      bio: "Expert in supply chain management and quality assurance with international certifications"
-    },
-    {
-      name: "David Ochieng",
-      position: "Head of Sales & Distribution",
-      image: "/api/placeholder/300/400",
-      bio: "Proven track record in building distribution networks and strategic partnerships"
-    },
-    {
-      name: "Grace Mutua",
-      position: "Quality Assurance Manager",
-      image: "/api/placeholder/300/400",
-      bio: "Certified quality professional ensuring all products meet international standards"
-    }
-  ];
 
   // Company values
   const values = [
@@ -192,36 +165,6 @@ const About = () => {
               for our innovation, reliability, and contribution to sustainable economic development. We envision
               a future where Kenyan-made products are the preferred choice in regional and international markets.
             </p>
-          </div>
-        </div>
-      )
-    },
-    leadership: {
-      title: "Leadership Team",
-      content: (
-        <div className="space-y-8">
-          <p className="text-xl text-gray-600 leading-relaxed text-center max-w-3xl mx-auto">
-            Our leadership team combines decades of experience in manufacturing, distribution, and business development.
-            Together, they guide Rekker's strategic vision and operational excellence.
-          </p>
-
-          <div className="grid lg:grid-cols-2 gap-8">
-            {leadership.map((leader, index) => (
-              <div key={index} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-border hover:shadow-xl hover:border-primary/30 transition-all duration-300">
-                <div className="aspect-w-3 aspect-h-2">
-                  <img
-                    src={leader.image}
-                    alt={leader.name}
-                    className="w-full h-64 object-cover"
-                  />
-                </div>
-                <div className="p-6">
-                  <h3 className="text-xl font-bold text-ink mb-2">{leader.name}</h3>
-                  <p className="text-primary font-semibold mb-3">{leader.position}</p>
-                  <p className="text-gray-600 leading-relaxed">{leader.bio}</p>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )

@@ -1,338 +1,251 @@
-/* eslint-disable react/jsx-key */
-// client/src/pages/shopping-view/listing.jsx - Fixed Filter Persistence
+/* eslint-disable react-hooks/exhaustive-deps */
+// client/src/pages/shopping-view/listing.jsx
+// Products page. The URL is the single source of truth:
+//   /products?category=hair-care&brand=cornells&sort=newest
+// so every filtered view is shareable, bookmarkable and works with the
+// browser back button. Only two filters exist: category and brand.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import axios from "axios";
+import { ArrowUpDownIcon, Filter, Loader2, PackageSearch, X } from "lucide-react";
 import ProductFilter from "@/components/shopping-view/filter";
 import LuxuryProductTile from "@/components/shopping-view/product-tile";
+import { WideBanner } from "@/components/shopping-view/ad-banners";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/use-toast";
 import { sortOptions } from "@/config";
+import { API_BASE_URL } from "@/config/config.js";
 import { addToCart, fetchCartItems } from "@/store/shop/cart-slice";
-import {
-  fetchAllFilteredProducts,
-} from "@/store/shop/products-slice";
-import { ArrowUpDownIcon, Grid3x3, LayoutGrid, Filter, X, ShoppingBag, Package } from "lucide-react";
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { fetchWishlist } from "@/store/shop/wishlist-slice";
 import useSeo from "@/hooks/use-seo";
-import { brandOptionsMap, categoryOptionsMap } from "@/config";
 
-function createSearchParamsHelper(filterParams) {
-  const queryParams = [];
+const PAGE_SIZE = 24;
+const csv = (v) => (v ? v.split(",").map((x) => x.trim()).filter(Boolean) : []);
 
-  for (const [key, value] of Object.entries(filterParams)) {
-    if (Array.isArray(value) && value.length > 0) {
-      const paramValue = value.join(",");
-      queryParams.push(`${key}=${encodeURIComponent(paramValue)}`);
-    }
-  }
+// old links (/products?category=toys&brand=saffron) keep working
+const OLD_BRAND_SLUGS = { saffron: "saffron-milan", biosaff: "bio-saff" };
 
-  return queryParams.join("&");
-}
-
-function ShoppingListing() {
+export default function ShoppingListing() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { productList } = useSelector(
-    (state) => state.shopProducts
-  );
-  const { cartItems } = useSelector((state) => state.shopCart);
-  const { user, isAuthenticated } = useSelector((state) => state.auth);
-  const [filters, setFilters] = useState({});
-  const [sort, setSort] = useState("price-lowtohigh");
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [gridView, setGridView] = useState("4");
-  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
   const { toast } = useToast();
+  const [params, setParams] = useSearchParams();
+  const { cartItems } = useSelector((s) => s.shopCart);
+  const { user, isAuthenticated } = useSelector((s) => s.auth);
 
-  // Reflects active filters in the title/description — "Saffron Toilet
-  // Cleaner — Shop Online" ranks far better for a specific search than a
-  // generic "Shop All Products" on every filtered view.
-  const activeBrandLabel = filters?.brand?.[0] ? brandOptionsMap[filters.brand[0]] : null;
-  const activeCategoryLabel = filters?.category?.[0] ? categoryOptionsMap[filters.category[0]] : null;
-  const filterLabel = [activeBrandLabel, activeCategoryLabel].filter(Boolean).join(" ");
+  const selected = useMemo(() => ({
+    category: csv(params.get("category")),
+    brand: csv(params.get("brand")).map((b) => OLD_BRAND_SLUGS[b] || b),
+  }), [params]);
+  const sort = params.get("sort") || "newest";
+  const search = params.get("search") || "";
+
+  const [products, setProducts] = useState([]);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
+  const [options, setOptions] = useState({ categories: [], brands: [] });
+  const [categoryInfo, setCategoryInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const reqId = useRef(0);
+
+  const update = useCallback((next) => {
+    const p = new URLSearchParams(params);
+    Object.entries(next).forEach(([k, v]) => {
+      const val = Array.isArray(v) ? v.join(",") : v;
+      if (val) p.set(k, val); else p.delete(k);
+    });
+    setParams(p, { replace: true });
+  }, [params, setParams]);
+
+  const toggle = (key) => (slug) => {
+    const cur = selected[key];
+    update({ [key]: cur.includes(slug) ? cur.filter((x) => x !== slug) : [...cur, slug] });
+  };
+
+  // Products (page 1 whenever filters or sort change)
+  useEffect(() => {
+    const id = ++reqId.current;
+    setLoading(true);
+    axios.get(`${API_BASE_URL}/api/shop/products`, {
+      params: { category: selected.category.join(","), brand: selected.brand.join(","), sortBy: sort, search, page: 1, limit: PAGE_SIZE },
+    }).then(({ data }) => {
+      if (id !== reqId.current) return;
+      setProducts(data.data || []);
+      setPagination(data.pagination || { total: 0, page: 1, pages: 1 });
+    }).catch(() => { if (id === reqId.current) setProducts([]); })
+      .finally(() => { if (id === reqId.current) setLoading(false); });
+  }, [selected.category.join(","), selected.brand.join(","), sort, search]);
+
+  // Sidebar options with live counts
+  useEffect(() => {
+    axios.get(`${API_BASE_URL}/api/shop/products/filters`, { params: { category: selected.category.join(","), brand: selected.brand.join(",") } })
+      .then(({ data }) => setOptions(data.data || { categories: [], brands: [] })).catch(() => {});
+  }, [selected.category.join(","), selected.brand.join(",")]);
+
+  // Heading / SEO for a single chosen category
+  useEffect(() => {
+    if (selected.category.length !== 1) { setCategoryInfo(null); return; }
+    axios.get(`${API_BASE_URL}/api/shop/categories/${selected.category[0]}`)
+      .then(({ data }) => setCategoryInfo(data.data)).catch(() => setCategoryInfo(null));
+  }, [selected.category.join(",")]);
+
+  useEffect(() => { if (user?.id) dispatch(fetchWishlist(user.id)); }, [dispatch, user?.id]);
+
+  const brandName = selected.brand.length === 1 ? options.brands.find((b) => b.slug === selected.brand[0])?.name : null;
+  const heading = [brandName, categoryInfo?.name].filter(Boolean).join(" ") || (search ? `Results for “${search}”` : "All products");
 
   useSeo({
-    title: filterLabel ? `${filterLabel} — Shop Online` : "Shop All Products",
-    description: filterLabel
-      ? `Shop ${filterLabel} online at Rekker — delivered across Kenya with M-Pesa and card checkout.`
-      : "Browse the full Rekker catalogue — Saffron Milan, Bio Saff and Cornells home care, beauty and personal care products, delivered across Kenya.",
+    title: categoryInfo?.seoTitle && !brandName ? categoryInfo.seoTitle : (heading !== "All products" ? `${heading} — Shop Online` : "Shop All Products"),
+    description: categoryInfo?.seoDescription && !brandName
+      ? categoryInfo.seoDescription
+      : heading !== "All products"
+        ? `Shop ${heading} online at Rekker — delivered across Kenya with M-Pesa and card checkout.`
+        : "Browse the full Rekker catalogue — Saffron Milan, Bio Saff and Cornells home care, beauty and personal care products, delivered across Kenya.",
     path: "/products",
   });
 
-  const handleSort = useCallback((value) => {
-    setSort(value);
-  }, []);
-
-  const handleFilter = useCallback((getSectionId, getCurrentOption) => {
-    setFilters(prevFilters => {
-      const cpyFilters = { ...prevFilters };
-      const indexOfCurrentSection = Object.keys(cpyFilters).indexOf(getSectionId);
-
-      if (indexOfCurrentSection === -1) {
-        cpyFilters[getSectionId] = [getCurrentOption];
-      } else {
-        const indexOfCurrentOption =
-          cpyFilters[getSectionId].indexOf(getCurrentOption);
-
-        if (indexOfCurrentOption === -1) {
-          cpyFilters[getSectionId].push(getCurrentOption);
-        } else {
-          cpyFilters[getSectionId].splice(indexOfCurrentOption, 1);
-        }
-      }
-
-      sessionStorage.setItem("filters", JSON.stringify(cpyFilters));
-      return cpyFilters;
-    });
-  }, []);
-
-  const handleAddtoCart = useCallback((getCurrentProductId, getTotalStock) => {
-    if (!isAuthenticated || !user) {
-      toast({
-        title: "Login Required",
-        description: "Please login to add items to your cart",
-        variant: "destructive",
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/api/shop/products`, {
+        params: { category: selected.category.join(","), brand: selected.brand.join(","), sortBy: sort, search, page: pagination.page + 1, limit: PAGE_SIZE },
       });
-      navigate('/auth/login');
+      setProducts((p) => [...p, ...(data.data || [])]);
+      setPagination(data.pagination);
+    } finally { setLoadingMore(false); }
+  }
+
+  const handleAddtoCart = useCallback(async (productId, totalStock) => {
+    if (!isAuthenticated || !user) {
+      toast({ title: "Login Required", description: "Please login to add items to your cart", variant: "destructive" });
+      navigate("/auth/login");
       return;
     }
-
-    let getCartItems = cartItems.items || [];
-
-    if (getCartItems.length) {
-      const indexOfCurrentItem = getCartItems.findIndex(
-        (item) => item.productId === getCurrentProductId
-      );
-      if (indexOfCurrentItem > -1) {
-        const getQuantity = getCartItems[indexOfCurrentItem].quantity;
-        if (getQuantity + 1 > getTotalStock) {
-          toast({
-            title: `Only ${getQuantity} quantity can be added for this item`,
-            variant: "destructive",
-          });
-          return;
-        }
-      }
+    const inCart = (cartItems?.items || []).find((i) => String(i.productId) === String(productId))?.quantity || 0;
+    if (totalStock !== undefined && inCart + 1 > totalStock) {
+      toast({ title: `Only ${inCart} available for this item`, variant: "destructive" });
+      return;
     }
-
-    dispatch(
-      addToCart({
-        userId: user?.id,
-        productId: getCurrentProductId,
-        quantity: 1,
-      })
-    ).then((data) => {
-      if (data?.payload?.success) {
-        dispatch(fetchCartItems(user?.id));
-        toast({
-          title: "Product is added to cart",
-        });
-      }
-    });
+    const res = await dispatch(addToCart({ userId: user?.id, productId, quantity: 1 }));
+    if (res?.payload?.success) { dispatch(fetchCartItems(user?.id)); toast({ title: "Product is added to cart" }); }
+    else toast({ title: res?.payload?.message || "Couldn't add to cart", variant: "destructive" });
   }, [isAuthenticated, user, cartItems, navigate, dispatch, toast]);
 
-  const clearAllFilters = useCallback(() => {
-    setFilters({});
-    sessionStorage.removeItem("filters");
-    setSearchParams({});
-  }, [setSearchParams]);
+  const activeCount = selected.category.length + selected.brand.length;
+  const clearAll = () => update({ category: "", brand: "" });
+  const filterProps = { options, selected, onToggleCategory: toggle("category"), onToggleBrand: toggle("brand"), onClear: clearAll };
 
-  const getActiveFilterCount = useMemo(() => {
-    let count = 0;
-    Object.values(filters).forEach(filterArray => {
-      if (Array.isArray(filterArray)) {
-        count += filterArray.length;
-      }
-    });
-    return count;
-  }, [filters]);
-
-  // FIXED: Initialize filters ONLY ONCE on mount
-  useEffect(() => {
-    if (initialLoad) {
-      const stored = sessionStorage.getItem("filters");
-      if (stored) {
-        try {
-          const parsedFilters = JSON.parse(stored);
-          console.log("📦 Loading filters from sessionStorage:", parsedFilters);
-          setFilters(parsedFilters);
-        } catch (e) {
-          console.error("Error parsing stored filters:", e);
-        }
-      }
-      setInitialLoad(false);
-    }
-  }, [initialLoad]);
-
-  // Update URL params when filters change (but don't re-trigger filter loading)
-  useEffect(() => {
-    if (!initialLoad && filters && Object.keys(filters).length > 0) {
-      const createQueryString = createSearchParamsHelper(filters);
-      setSearchParams(new URLSearchParams(createQueryString));
-    }
-  }, [filters, setSearchParams, initialLoad]);
-
-  // Fetch products when filters or sort changes
-  useEffect(() => {
-    if (!initialLoad) {
-      console.log("🔄 Fetching products with filters:", filters);
-      dispatch(
-        fetchAllFilteredProducts({ filterParams: filters, sortParams: sort })
-      );
-    }
-  }, [dispatch, sort, filters, initialLoad]);
-
-  const gridClasses = {
-    "3": "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
-    "4": "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
-    "5": "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5",
-  };
+  // removable chips for active filters
+  const chips = [
+    ...selected.category.map((slug) => ({ key: `c-${slug}`, label: findCatName(options, slug) || slug, remove: () => toggle("category")(slug) })),
+    ...selected.brand.map((slug) => ({ key: `b-${slug}`, label: options.brands.find((b) => b.slug === slug)?.name || slug, remove: () => toggle("brand")(slug) })),
+  ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="border-b border-border bg-secondary/50">
-        <div className="container mx-auto px-4 py-8">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-primary">Rekker Shop</p>
-          <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-ink sm:text-4xl">All Products</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{productList?.length || 0} products available</p>
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 py-8">
+      <WideBanner placement="listing" className="pb-6" />
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[260px_1fr]">
-          <aside className="hidden lg:block">
-            <div className="sticky top-24">
-              <ProductFilter filters={filters} handleFilter={handleFilter} />
+      <header className="mb-6">
+        {categoryInfo?.image && (
+          <div className="relative mb-5 h-36 overflow-hidden rounded-2xl sm:h-48">
+            <img src={categoryInfo.image} alt={categoryInfo.name} className="h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent" />
+            <div className="absolute inset-0 flex flex-col justify-center px-6 text-white">
+              <h1 className="font-display text-3xl font-bold sm:text-4xl">{heading}</h1>
+              {categoryInfo.description && <p className="mt-1 max-w-xl text-sm text-white/85">{categoryInfo.description}</p>}
             </div>
-          </aside>
-
-          <div className="space-y-6">
-            <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-                  <SheetTrigger asChild>
-                    <Button variant="outline" size="sm" className="relative rounded-full lg:hidden">
-                      <Filter className="mr-2 h-4 w-4" />
-                      Filters
-                      {getActiveFilterCount > 0 && (
-                        <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                          {getActiveFilterCount}
-                        </span>
-                      )}
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="left" className="w-[310px] overflow-auto p-0">
-                    <ProductFilter filters={filters} handleFilter={handleFilter} />
-                  </SheetContent>
-                </Sheet>
-
-                {getActiveFilterCount > 0 && (
-                  <Button variant="ghost" size="sm" onClick={clearAllFilters} className="rounded-full text-primary">
-                    <X className="mr-1.5 h-4 w-4" /> Clear ({getActiveFilterCount})
-                  </Button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="hidden items-center gap-1 rounded-full border border-border p-1 md:flex">
-                  <Button variant={gridView === "3" ? "secondary" : "ghost"} size="sm" onClick={() => setGridView("3")} className="h-8 w-8 rounded-full p-0" aria-label="3 column grid">
-                    <Grid3x3 className="h-4 w-4" />
-                  </Button>
-                  <Button variant={gridView === "4" ? "secondary" : "ghost"} size="sm" onClick={() => setGridView("4")} className="h-8 w-8 rounded-full p-0" aria-label="4 column grid">
-                    <LayoutGrid className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="min-w-[130px] rounded-full">
-                      <ArrowUpDownIcon className="mr-2 h-4 w-4" />
-                      Sort
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[200px]">
-                    <DropdownMenuRadioGroup value={sort} onValueChange={handleSort}>
-                      {sortOptions.map((sortItem) => (
-                        <DropdownMenuRadioItem value={sortItem.id} key={sortItem.id}>
-                          {sortItem.label}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-
-            {getActiveFilterCount > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                {Object.entries(filters).map(([key, values]) =>
-                  values.map((value) => (
-                    <button
-                      key={`${key}-${value}`}
-                      onClick={() => handleFilter(key, value)}
-                      className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-ink transition-colors hover:border-primary hover:text-primary"
-                    >
-                      {value}
-                      <X className="h-3 w-3" />
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-
-            {productList && productList.length > 0 ? (
-              <div className={`grid ${gridClasses[gridView]} gap-5`}>
-                {productList.map((productItem) => (
-                  <LuxuryProductTile
-                    key={productItem._id}
-                    product={productItem}
-                    handleAddtoCart={handleAddtoCart}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-border bg-card p-12 text-center">
-                <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-secondary">
-                  <Package className="h-9 w-9 text-primary" />
-                </div>
-                <h3 className="font-display text-2xl font-bold text-ink">
-                  {getActiveFilterCount > 0 ? "No products match your filters" : "No products available"}
-                </h3>
-                <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
-                  {getActiveFilterCount > 0
-                    ? "Try adjusting your criteria or explore the full collection."
-                    : "We're updating our inventory. Check back shortly."}
-                </p>
-                <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                  {getActiveFilterCount > 0 ? (
-                    <Button onClick={clearAllFilters} className="rounded-full">
-                      <X className="mr-2 h-4 w-4" /> Clear all filters
-                    </Button>
-                  ) : (
-                    <Button onClick={() => navigate("/")} className="rounded-full">
-                      <ShoppingBag className="mr-2 h-4 w-4" /> Browse collection
-                    </Button>
-                  )}
-                  <Button onClick={() => navigate("/contact")} variant="outline" className="rounded-full">
-                    Contact us
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
+        )}
+        {!categoryInfo?.image && (
+          <>
+            <h1 className="font-display text-3xl font-bold text-ink">{heading}</h1>
+            {categoryInfo?.description && <p className="mt-1 max-w-2xl text-muted-foreground">{categoryInfo.description}</p>}
+          </>
+        )}
+      </header>
+
+      <div className="grid gap-8 lg:grid-cols-[260px_1fr]">
+        <aside className="hidden lg:block">
+          <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-border bg-card p-4"><ProductFilter {...filterProps} /></div>
+        </aside>
+
+        <div>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">{loading ? "Loading…" : `${pagination.total} product${pagination.total === 1 ? "" : "s"}`}</p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="gap-2 lg:hidden" onClick={() => setMobileOpen(true)}>
+                <Filter className="h-4 w-4" /> Filter{activeCount > 0 && ` (${activeCount})`}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2"><ArrowUpDownIcon className="h-4 w-4" /> Sort by</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[210px]">
+                  <DropdownMenuRadioGroup value={sort} onValueChange={(v) => update({ sort: v === "newest" ? "" : v })}>
+                    {sortOptions.map((o) => <DropdownMenuRadioItem value={o.id} key={o.id}>{o.label}</DropdownMenuRadioItem>)}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {chips.length > 0 && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {chips.map((c) => (
+                <button key={c.key} onClick={c.remove} className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                  {c.label} <X className="h-3.5 w-3.5" />
+                </button>
+              ))}
+              <button onClick={clearAll} className="px-2 text-sm text-muted-foreground hover:text-ink">Clear all</button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-4">{Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-80 animate-pulse rounded-2xl bg-muted" />)}</div>
+          ) : products.length ? (
+            <>
+              <div className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-4">
+                {products.map((p) => <LuxuryProductTile key={p._id} product={p} handleAddtoCart={handleAddtoCart} />)}
+              </div>
+              {pagination.page < pagination.pages && (
+                <div className="mt-10 flex justify-center">
+                  <Button variant="outline" size="lg" className="rounded-full px-8" onClick={loadMore} disabled={loadingMore}>
+                    {loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Show more ({pagination.total - products.length} left)
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="rounded-2xl border border-border bg-card p-12 text-center">
+              <PackageSearch className="mx-auto h-12 w-12 text-muted-foreground" />
+              <p className="mt-3 font-semibold text-ink">No products match</p>
+              <p className="mt-1 text-sm text-muted-foreground">Try removing a filter.</p>
+              {activeCount > 0 && <Button className="mt-4 rounded-full" onClick={clearAll}>Clear filters</Button>}
+            </div>
+          )}
         </div>
       </div>
+
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="w-[88vw] max-w-sm overflow-y-auto">
+          <SheetHeader><SheetTitle className="sr-only">Filter products</SheetTitle></SheetHeader>
+          <div className="pt-4"><ProductFilter {...filterProps} /></div>
+          <Button className="mt-6 w-full rounded-full" onClick={() => setMobileOpen(false)}>Show {pagination.total} products</Button>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
 
-export default ShoppingListing;
+function findCatName(options, slug) {
+  for (const c of options.categories || []) {
+    if (c.slug === slug) return c.name;
+    const s = c.children.find((x) => x.slug === slug);
+    if (s) return s.name;
+  }
+  return null;
+}

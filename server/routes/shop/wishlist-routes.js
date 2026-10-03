@@ -2,10 +2,11 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const Wishlist = require("../../models/Wishlist");
+const { selfOnly } = require("../../middleware/self");
 const router = express.Router();
 
 // Get wishlist
-router.get("/:userId", async (req, res) => {
+router.get("/:userId", ...selfOnly, async (req, res) => {
   try {
     const { userId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -20,7 +21,7 @@ router.get("/:userId", async (req, res) => {
 });
 
 // Add to wishlist
-router.post("/", async (req, res) => {
+router.post("/", ...selfOnly, async (req, res) => {
   try {
     const { userId, productId } = req.body;
     if (!userId || !productId) {
@@ -44,7 +45,7 @@ router.post("/", async (req, res) => {
 });
 
 // Remove from wishlist
-router.post("/remove", async (req, res) => {
+router.post("/remove", ...selfOnly, async (req, res) => {
   try {
     const { userId, productId } = req.body;
     if (!userId || !productId) {

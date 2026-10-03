@@ -20,7 +20,7 @@ import {
 } from "@/store/admin/products-slice";
 import { fetchAllAdminBrands } from "@/store/admin/brands-slice";
 import { fetchAllAdminCategories } from "@/store/admin/categories-slice";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import VariationUploader from "@/components/admin-view/variation-uploader";
 import GalleryUploader from "@/components/admin-view/gallery-uploader";
@@ -36,8 +36,10 @@ const initialFormData = {
   images: [],
   title: "",
   description: "",
-  category: "",
-  subcategory: "",
+  categoryId: "",
+  subcategoryId: "",
+  productLine: "",
+  status: "active",
   price: "",
   salePrice: "",
   totalStock: "",
@@ -81,31 +83,89 @@ function AdminProducts() {
     label: b.name,
   }));
 
-  const categorySuggestions = (adminCategoryList || [])
-    .filter((c) => !c.parentId)
-    .map((c) => ({ id: c.slug, label: c.name }));
-
-  const subcategorySuggestions = (adminCategoryList || [])
-    .filter((c) => c.parentId)
-    .map((c) => ({ id: c.slug, label: c.name }));
-
   const dynamicSuggestions = {
     brand: brandSuggestions,
-    category: categorySuggestions,
-    subcategory: subcategorySuggestions,
   };
 
-  // Debug logging
+  // Categories are real shelves shared by every brand: pick a main category,
+  // then (optionally) one of ITS subcategories.
+  const activeCategories = useMemo(
+    () => (adminCategoryList || []).filter((c) => c.source !== "legacy" && c.isActive !== false),
+    [adminCategoryList]
+  );
+  const mainCategories = activeCategories.filter((c) => !c.parentId);
+  const idOf = (v) => (v && typeof v === "object" ? v._id : v) || "";
+
+  const formControls = useMemo(() => {
+    const subs = activeCategories.filter((c) => c.parentId && String(c.parentId) === String(formData.categoryId));
+    return addProductFormElements.flatMap((el) => {
+      if (el.name === "category") {
+        return [{
+          label: "Category",
+          name: "categoryId",
+          componentType: "select",
+          options: mainCategories.map((c) => ({ id: c._id, label: c.name })),
+          placeholder: "Choose a category (e.g. Hair Care)",
+          required: true,
+        }];
+      }
+      if (el.name === "subcategory") {
+        return [{
+          label: "Subcategory (optional)",
+          name: "subcategoryId",
+          componentType: "select",
+          options: subs.map((c) => ({ id: c._id, label: c.name })),
+          placeholder: formData.categoryId
+            ? (subs.length ? "Choose a subcategory" : "This category has no subcategories")
+            : "Pick a category first",
+        }];
+      }
+      return [el];
+    }).concat([
+      {
+        label: "Range / Line (optional)",
+        name: "productLine",
+        componentType: "input",
+        type: "text",
+        placeholder: "e.g. Super Foods, Dark & Beautiful — shown on the product, not a filter",
+      },
+      {
+        label: "Visibility",
+        name: "status",
+        componentType: "select",
+        options: [
+          { id: "active", label: "Active — visible in the shop" },
+          { id: "draft", label: "Draft — hidden from the shop" },
+          { id: "archived", label: "Archived — hidden, kept for records" },
+        ],
+        placeholder: "Visibility",
+      },
+    ]);
+  }, [activeCategories, mainCategories, formData.categoryId]);
+
+  // Old products only have the text slug — match it to the real category so Edit shows it
+  function normaliseForEdit(p) {
+    let categoryId = idOf(p.categoryId);
+    let subcategoryId = idOf(p.subcategoryId);
+    if (!categoryId && p.category) {
+      const m = (adminCategoryList || []).find((c) => c.slug === p.category && !c.parentId);
+      if (m) categoryId = m._id;
+    }
+    if (!subcategoryId && p.subcategory) {
+      const m = (adminCategoryList || []).find((c) => c.slug === p.subcategory && c.parentId);
+      if (m) subcategoryId = m._id;
+    }
+    return { ...p, categoryId, subcategoryId, brandId: idOf(p.brandId), productLine: p.productLine || "", status: p.status || "active" };
+  }
+
+  // Clear the subcategory if it doesn't belong to the chosen category
   useEffect(() => {
-    console.log("FormData updated:", {
-      ...formData,
-      variations: formData.variations?.map(v => ({
-        label: v.label,
-        imagePreview: v.image?.substring(0, 50) + "...",
-        hasId: !!v._id
-      }))
-    });
-  }, [formData]);
+    if (!formData.subcategoryId) return;
+    const sub = (adminCategoryList || []).find((c) => c._id === formData.subcategoryId);
+    if (!sub || String(sub.parentId) !== String(formData.categoryId)) {
+      setFormData((f) => ({ ...f, subcategoryId: "" }));
+    }
+  }, [formData.categoryId, formData.subcategoryId, adminCategoryList]);
 
   function resetForm() {
     setFormData(initialFormData);
@@ -127,6 +187,10 @@ function AdminProducts() {
       ...formData,
       image: uploadedImageUrl || formData.image || null,
       images: formData.images || [],
+      category: undefined,
+      subcategory: undefined,
+      categoryId: formData.categoryId,
+      subcategoryId: formData.subcategoryId || null,
       price: Number(formData.price),
       salePrice: formData.salePrice ? Number(formData.salePrice) : 0,
       totalStock: Number(formData.totalStock),
@@ -212,7 +276,7 @@ function AdminProducts() {
   function isFormValid() {
     // Check required fields — subcategory is optional for every brand now,
     // since brands are open-ended (no fixed list to key a rule off of).
-    const requiredFields = ['brand', 'title', 'category', 'price', 'totalStock'];
+    const requiredFields = ['brand', 'title', 'categoryId', 'price', 'totalStock'];
 
     const areRequiredFieldsFilled = requiredFields.every(field => {
       const value = formData[field];
@@ -235,7 +299,7 @@ function AdminProducts() {
   function handleEdit(productData) {
     console.log("Handling edit with data:", productData);
     
-    setFormData(productData);
+    setFormData(normaliseForEdit(productData));
     setUploadedImageUrl(productData.image || "");
     setCurrentEditedId(productData._id || null);
     setOpenCreateProductsDialog(true);
@@ -498,7 +562,7 @@ function AdminProducts() {
                 formData={formData}
                 setFormData={setFormData}
                 buttonText={isEditMode ? "Update Product" : "Add Product"}
-                formControls={addProductFormElements}
+                formControls={formControls}
                 isBtnDisabled={!isFormValid()}
                 dynamicSuggestions={dynamicSuggestions}
               />
@@ -511,7 +575,7 @@ function AdminProducts() {
                 <ul className="text-sm text-yellow-700 space-y-1">
                   <li>• Brand is required (pick an existing one, or type a new brand name)</li>
                   <li>• Title is required</li>
-                  <li>• Category is required (pick an existing one, or type a new category name)</li>
+                  <li>• Category is required (choose from the list — manage the list in Categories)</li>
                   <li>• Price must be a valid number ≥ 0</li>
                   <li>• Stock must be a valid number ≥ 0</li>
                   <li>• At least one image (main image, extra photo, or variation) is required</li>

@@ -1,5 +1,6 @@
 // shop/server/controllers/common/contact-controller.js
 const ContactMessage = require("../../models/ContactMessage");
+const { notifyNewMessage } = require("../../helpers/notifications");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -36,6 +37,8 @@ const createContactMessage = async (req, res) => {
       message: String(message).slice(0, 5000),
       pageUrl: String(pageUrl).slice(0, 500),
     });
+
+    notifyNewMessage(doc);
 
     return res.status(201).json({ success: true, message: "Message received.", data: { id: doc._id } });
   } catch (error) {

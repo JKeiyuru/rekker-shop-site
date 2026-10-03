@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 
+// A cart line is EITHER a product (productId) OR a bundle deal (bundleId).
 const CartSchema = new mongoose.Schema(
   {
     userId: {
@@ -12,7 +13,12 @@ const CartSchema = new mongoose.Schema(
         productId: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Product",
-          required: true,
+          default: null,
+        },
+        bundleId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Bundle",
+          default: null,
         },
         quantity: {
           type: Number,

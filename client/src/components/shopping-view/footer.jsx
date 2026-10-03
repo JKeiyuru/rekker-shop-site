@@ -6,6 +6,7 @@ const columns = [
     title: "Shop",
     links: [
       { label: "All products", to: "/products" },
+      { label: "Bundle deals", to: "/deals" },
       { label: "Saffron Milan", to: "/brands/saffron" },
       { label: "Cornells", to: "/brands/cornells" },
       { label: "Search", to: "/search" },
@@ -16,6 +17,7 @@ const columns = [
     links: [
       { label: "About Rekker", to: "/about" },
       { label: "Contact", to: "/contact" },
+      { label: "Wholesale accounts", to: "/wholesale" },
       { label: "Distributors", to: "/distributors" },
       { label: "Corporate site", to: "https://rekker.co.ke", external: true },
     ],

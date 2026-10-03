@@ -16,6 +16,10 @@ import { fetchWishlist } from "@/store/shop/wishlist-slice";
 import { useToast } from "@/components/ui/use-toast";
 import ProductTile from "@/components/shopping-view/product-tile";
 import useSeo from "@/hooks/use-seo";
+import axios from "axios";
+import { API_BASE_URL } from "@/config/config.js";
+import { HeroSlider, PromoTiles, WideBanner } from "@/components/shopping-view/ad-banners";
+import BundleCard from "@/components/shopping-view/bundle-card";
 
 const brands = [
   {
@@ -78,6 +82,15 @@ function ShoppingHome() {
     dispatch(fetchAllFilteredProducts({ filterParams: {}, sortParams: "price-lowtohigh" }));
   }, [dispatch]);
 
+  const [homeCategories, setHomeCategories] = useState([]);
+  const [homeBundles, setHomeBundles] = useState([]);
+  useEffect(() => {
+    axios.get(`${API_BASE_URL}/api/shop/categories`, { params: { home: "true" } })
+      .then(({ data }) => setHomeCategories(data.data || [])).catch(() => {});
+    axios.get(`${API_BASE_URL}/api/shop/bundles`)
+      .then(({ data }) => setHomeBundles((data.data || []).slice(0, 4))).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (user?.id) dispatch(fetchWishlist(user.id));
   }, [dispatch, user]);
@@ -101,7 +114,8 @@ function ShoppingHome() {
 
   return (
     <div className="flex flex-col">
-      {/* Hero */}
+      {/* Hero: admin-managed slider (Ads & Banners); the original hero shows until one is added */}
+      <HeroSlider fallback={
       <section className="relative overflow-hidden bg-ink text-ink-foreground">
         <div className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-primary/30 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 left-1/4 h-80 w-80 rounded-full bg-accent/20 blur-3xl" />
@@ -158,6 +172,10 @@ function ShoppingHome() {
           </motion.div>
         </div>
       </section>
+      } />
+
+      {/* Promo tiles (Ads & Banners → small tiles) */}
+      <PromoTiles />
 
       {/* Promises */}
       <section className="border-b border-border bg-secondary">
@@ -173,6 +191,28 @@ function ShoppingHome() {
           ))}
         </div>
       </section>
+
+      {/* Shop by category */}
+      {homeCategories.length > 0 && (
+        <section className="container mx-auto px-4 pt-16">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Browse</p>
+          <h2 className="mt-2 font-display text-3xl font-bold text-ink">Shop by category</h2>
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            {homeCategories.map((c) => (
+              <Link key={c._id} to={`/products?category=${c.slug}`} className="group text-center">
+                <div className="aspect-square overflow-hidden rounded-2xl bg-secondary">
+                  {c.image ? (
+                    <img src={c.image} alt={c.name} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center font-display text-4xl font-bold text-primary/40">{c.name.slice(0, 1)}</div>
+                  )}
+                </div>
+                <p className="mt-3 text-sm font-semibold text-ink group-hover:text-primary">{c.name}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Featured */}
       <section className="container mx-auto px-4 py-16">
@@ -224,6 +264,26 @@ function ShoppingHome() {
         </section>
       )}
 
+      {/* Bundle deals */}
+      {homeBundles.length > 0 && (
+        <section className="container mx-auto px-4 py-16">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-primary">Save more</p>
+              <h2 className="mt-2 font-display text-3xl font-bold text-ink">Bundle deals</h2>
+            </div>
+            <Button variant="ghost" className="rounded-full" onClick={() => navigate("/deals")}>
+              All bundles <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {homeBundles.map((b) => <BundleCard key={b._id} bundle={b} />)}
+          </div>
+        </section>
+      )}
+
+      <WideBanner placement="wide" />
+
       {/* Trade CTA */}
       <section className="container mx-auto px-4 py-16">
         <div className="flex flex-col items-start justify-between gap-6 rounded-3xl bg-ink p-10 text-ink-foreground md:flex-row md:items-center">
@@ -234,8 +294,8 @@ function ShoppingHome() {
               deliveries across Kenya.
             </p>
           </div>
-          <Button size="lg" className="rounded-full px-7" onClick={() => navigate("/distributors")}>
-            Become a stockist <ArrowRight className="ml-2 h-4 w-4" />
+          <Button size="lg" className="rounded-full px-7" onClick={() => navigate("/wholesale")}>
+            Apply for a wholesale account <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
       </section>

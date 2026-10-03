@@ -25,6 +25,11 @@ function AdminProductTile({
       description: product.description || "",
       category: product.category || "",
       subcategory: product.subcategory || "",
+      categoryId: product.categoryId?._id || product.categoryId || "",
+      subcategoryId: product.subcategoryId?._id || product.subcategoryId || "",
+      productLine: product.productLine || "",
+      status: product.status || "active",
+      images: product.images || [],
       price: product.price || "",
       salePrice: product.salePrice || "",
       totalStock: product.totalStock || "",
@@ -68,7 +73,7 @@ function AdminProductTile({
   };
 
   // Get category and subcategory display
-  const categoryDisplay = categoryOptionsMap[product?.category] || product?.category;
+  const categoryDisplay = product?.categoryId?.name || categoryOptionsMap[product?.category] || product?.category;
   const subcategoryDisplay = product?.subcategory ? 
     (subcategoryOptionsMap[product.subcategory] || product.subcategory) : null;
 

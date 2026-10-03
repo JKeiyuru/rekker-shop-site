@@ -1,16 +1,12 @@
 const express = require("express");
-const {
-  createBundle,
-  getAllBundles,
-  updateBundle,
-  deleteBundle,
-} = require("../../controllers/admin/bundles-controller");
+const c = require("../../controllers/admin/bundles-controller");
 
 const router = express.Router();
 
-router.post("/add", createBundle);
-router.get("/get", getAllBundles);
-router.put("/edit/:id", updateBundle);
-router.delete("/delete/:id", deleteBundle);
+router.post("/add", c.createBundle);
+router.get("/get", c.getAllBundles);
+router.put("/edit/:id", c.updateBundle);
+router.put("/toggle/:id", c.toggleBundle);
+router.delete("/delete/:id", c.deleteBundle);
 
 module.exports = router;

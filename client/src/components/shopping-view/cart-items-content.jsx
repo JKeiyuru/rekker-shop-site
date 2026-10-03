@@ -6,38 +6,20 @@ import { useToast } from "../ui/use-toast";
 
 function UserCartItemsContent({ cartItem }) {
   const { user } = useSelector((state) => state.auth);
-  const { cartItems } = useSelector((state) => state.shopCart);
-  const { productList } = useSelector((state) => state.shopProducts);
-  const dispatch = useDispatch();
+    const dispatch = useDispatch();
   const { toast } = useToast();
 
   function handleUpdateQuantity(getCartItem, typeOfAction) {
     if (typeOfAction == "plus") {
-      let getCartItems = cartItems.items || [];
-
-      if (getCartItems.length) {
-        const indexOfCurrentCartItem = getCartItems.findIndex(
-          (item) => item.productId === getCartItem?.productId
-        );
-
-        const getCurrentProductIndex = productList.findIndex(
-          (product) => product._id === getCartItem?.productId
-        );
-        const getTotalStock = productList[getCurrentProductIndex].totalStock;
-
-        console.log(getCurrentProductIndex, getTotalStock, "getTotalStock");
-
-        if (indexOfCurrentCartItem > -1) {
-          const getQuantity = getCartItems[indexOfCurrentCartItem].quantity;
-          if (getQuantity + 1 > getTotalStock) {
-            toast({
-              title: `Only ${getQuantity} quantity can be added for this item`,
-              variant: "destructive",
-            });
-
-            return;
-          }
-        }
+      // The server sends the live stock (for bundles: how many can be made)
+      const getTotalStock = Number(getCartItem?.totalStock ?? Infinity);
+      const limit = getCartItem?.maxPerOrder > 0 ? Math.min(getTotalStock, getCartItem.maxPerOrder) : getTotalStock;
+      if (getCartItem.quantity + 1 > limit) {
+        toast({
+          title: `Only ${getCartItem.quantity} available for this item`,
+          variant: "destructive",
+        });
+        return;
       }
     }
 
@@ -81,7 +63,15 @@ function UserCartItemsContent({ cartItem }) {
         className="h-20 w-20 rounded-lg object-cover"
       />
       <div className="min-w-0 flex-1">
-        <h3 className="truncate text-sm font-semibold text-ink">{cartItem?.title}</h3>
+        <h3 className="truncate text-sm font-semibold text-ink">
+          {cartItem?.isBundle && <span className="mr-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary">Bundle</span>}
+          {cartItem?.title}
+        </h3>
+        {cartItem?.isBundle && cartItem?.bundleItems?.length > 0 && (
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            Includes {cartItem.bundleItems.map((b) => `${b.qty}× ${b.title}`).join(", ")}
+          </p>
+        )}
         <div className="mt-2 flex items-center gap-2">
           <Button
             variant="outline"

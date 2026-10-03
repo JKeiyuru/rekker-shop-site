@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 // client/src/components/admin-view/bulk-import.jsx
+import { authHeaders } from "@/lib/auth-token";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,6 +77,8 @@ function BulkImport({ onImportComplete }) {
       const response = await fetch(`${API_BASE_URL}/api/admin/products/bulk-import`, {
         method: "POST",
         body: formData,
+        credentials: "include",
+        headers: { ...authHeaders() },
       });
 
       const result = await response.json();
@@ -105,8 +108,27 @@ function BulkImport({ onImportComplete }) {
     }
   }
 
-  function downloadTemplate() {
-    window.open(`${API_BASE_URL}/api/admin/products/bulk-import-template`, "_blank");
+  // The admin API now requires login, so the template is fetched with the
+  // session token and saved as a file (a plain link/new tab can't send it).
+  async function downloadTemplate() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/products/bulk-import-template`, {
+        credentials: "include",
+        headers: { ...authHeaders() },
+      });
+      if (!res.ok) throw new Error("Could not download the template");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "rekker-product-import-template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast({ title: "Download failed", description: e.message, variant: "destructive" });
+    }
   }
 
   function resetFiles() {

@@ -5,16 +5,18 @@ const {
   getProductDetails,
   listShopProducts,
   getProductBySlug,
+  getFilterOptions,
 } = require("../../controllers/shop/products-controller");
 
 const router = express.Router();
 
-// Legacy endpoints (kept for backward compatibility)
+// Legacy endpoints (kept so older pages keep working)
 router.get("/get", getFilteredProducts);
 router.get("/get/:id", getProductDetails);
 
-// New multi-brand catalogue endpoints
-router.get("/", listShopProducts);
+// Storefront catalogue
+router.get("/filters", getFilterOptions);
 router.get("/slug/:slug", getProductBySlug);
+router.get("/", listShopProducts);
 
 module.exports = router;
