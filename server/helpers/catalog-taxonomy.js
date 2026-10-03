@@ -303,10 +303,12 @@ function guessFromTitle(title) {
 // Look a slug up in the standard taxonomy → { top, sub }
 function findStandard(slug) {
   if (!slug) return null;
+  // matches the slug ("hair-care") OR the display name typed by a person
+  // ("Hair Care", "Hair Oils, Serums & Mists") — both normalise the same way
   for (const top of TAXONOMY) {
-    if (top.slug === slug) return { top: top.slug, sub: null };
+    if (top.slug === slug || norm(top.name) === slug) return { top: top.slug, sub: null };
     for (const child of top.children) {
-      if (child.slug === slug) return { top: top.slug, sub: child.slug };
+      if (child.slug === slug || norm(child.name) === slug) return { top: top.slug, sub: child.slug };
     }
   }
   if (slug === UNCATEGORISED.slug) return { top: UNCATEGORISED.slug, sub: null };
