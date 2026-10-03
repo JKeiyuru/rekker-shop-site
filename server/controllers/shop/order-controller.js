@@ -9,6 +9,7 @@ const Cart    = require("../../models/Cart");
 const User    = require("../../models/User");
 const { priceOrderLines, resolveDeliveryFee, deductStockForOrder } = require("../../helpers/order-pricing");
 const { notifyNewOrder, notifyLowStock } = require("../../helpers/notifications");
+const { evaluateCode, redeemForOrder } = require("../../helpers/discounts");
 
 let sendOrderConfirmationEmail = () => Promise.resolve();
 try {
@@ -54,7 +55,7 @@ const normalisePhone = (phone) => {
 // contents, stock and the delivery fee are all worked out here.
 const createOrder = async (req, res) => {
   try {
-    const { userId, cartItems, addressInfo, paymentMethod, deliveryFee, orderDate, cartId } = req.body;
+    const { userId, cartItems, addressInfo, paymentMethod, deliveryFee, orderDate, cartId, discountCode } = req.body;
 
     console.log(`📦 createOrder — method: ${paymentMethod}, user: ${userId}`);
 
@@ -85,17 +86,29 @@ const createOrder = async (req, res) => {
 
     const finalDeliveryFee = await resolveDeliveryFee(addressInfo, deliveryFee);
 
+    // Optional discount / influencer code — re-checked here, never trusted from the browser
+    let discountAmount = 0;
+    let appliedCode = null;
+    if (discountCode) {
+      const ev = await evaluateCode({ code: discountCode, userId, lines: priced.lines, subtotal: priced.subtotal });
+      if (!ev.ok) return res.status(409).json({ success: false, message: ev.error });
+      discountAmount = ev.discountAmount;
+      appliedCode = ev.code.code;
+    }
+
     const order = new Order({
       userId,
       cartId:         cartId || null,
       cartItems:      priced.lines,
       addressInfo,
+      discountCode:   appliedCode,
+      discountAmount,
       paymentMethod:  "cod",
       paymentStatus:  "pending",
       orderStatus:    "pending",
       subtotalAmount: priced.subtotal,
       deliveryFee:    finalDeliveryFee,
-      totalAmount:    priced.subtotal + finalDeliveryFee,
+      totalAmount:    priced.subtotal - discountAmount + finalDeliveryFee,
       orderDate:      orderDate ? new Date(orderDate) : new Date(),
     });
 
@@ -104,6 +117,7 @@ const createOrder = async (req, res) => {
     order.adminNotifiedAt = new Date();
     await order.save();
     console.log("✅ COD order saved:", order._id);
+    if (appliedCode) { await redeemForOrder(order); await order.save(); }
 
     clearUserCart(userId, cartId);
     fireConfirmationEmail(userId, order);
@@ -123,6 +137,8 @@ const createOrder = async (req, res) => {
         totalAmount: order.totalAmount,
         subtotalAmount: order.subtotalAmount,
         deliveryFee: order.deliveryFee,
+        discountCode: order.discountCode,
+        discountAmount: order.discountAmount,
         cartItems: order.cartItems,
       },
     });

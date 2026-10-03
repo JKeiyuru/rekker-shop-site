@@ -65,7 +65,7 @@ function ProductTile({ product, handleAddtoCart }) {
           className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
         />
 
-        <div className="absolute left-3 top-3 flex flex-col gap-2">
+        <div className="absolute left-2 top-2 flex flex-col gap-1.5 sm:left-3 sm:top-3 sm:gap-2">
           {soldOut ? (
             <span className="rounded-full bg-ink px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-ink-foreground">Sold out</span>
           ) : discount > 0 ? (
@@ -81,27 +81,27 @@ function ProductTile({ product, handleAddtoCart }) {
         <button
           onClick={toggleWishlist}
           aria-label="Add to wishlist"
-          className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-background/90 backdrop-blur transition-colors hover:bg-background"
+          className="absolute right-2 top-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full sm:right-3 sm:top-3 sm:h-9 sm:w-9 bg-background/90 backdrop-blur transition-colors hover:bg-background"
         >
           <Heart className={`h-4 w-4 ${isWishlisted ? "fill-primary text-primary" : "text-ink"}`} />
         </button>
 
-        {/* Mobile: always visible (touch devices don't have real :hover, so
-            a hover-reveal button here just meant it was invisible on
-            phones). Desktop keeps the elegant hover-reveal via lg: */}
-        <div className="absolute inset-x-3 bottom-3 flex gap-2 opacity-100 translate-y-0 transition-all duration-300 lg:opacity-0 lg:translate-y-3 lg:group-hover:translate-y-0 lg:group-hover:opacity-100">
+        {/* Desktop only: hover-reveal actions over the photo. On phones these
+            sit BELOW the product details instead (see the bottom of the card),
+            because overlaying two buttons on a narrow photo clipped the eye icon. */}
+        <div className="absolute inset-x-3 bottom-3 hidden gap-2 opacity-0 translate-y-3 transition-all duration-300 lg:flex lg:group-hover:translate-y-0 lg:group-hover:opacity-100">
           <Button
             size="sm"
-            className="flex-1 rounded-full"
+            className="min-w-0 flex-1 rounded-full"
             disabled={soldOut}
             onClick={(e) => { e.stopPropagation(); handleAddtoCart?.(product?._id, product?.totalStock); }}
           >
-            <ShoppingBag className="mr-1.5 h-4 w-4" /> {soldOut ? "Sold out" : "Add to cart"}
+            <ShoppingBag className="mr-1.5 h-4 w-4 shrink-0" /> {soldOut ? "Sold out" : "Add to cart"}
           </Button>
           <Button
             size="icon"
             variant="secondary"
-            className="rounded-full"
+            className="h-9 w-9 shrink-0 rounded-full"
             onClick={(e) => { e.stopPropagation(); goToProduct(); }}
             aria-label="Quick view"
           >
@@ -110,12 +110,12 @@ function ProductTile({ product, handleAddtoCart }) {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="flex flex-1 flex-col gap-1.5 p-3 sm:gap-2 sm:p-4">
+        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:text-[11px] sm:tracking-[0.16em]">
           {product?.brandId?.name || brandOptionsMap[product?.brand] || product?.brand}
           {(product?.categoryId?.name || product?.category) ? ` · ${product?.categoryId?.name || categoryOptionsMap[product.category] || product.category}` : ""}
         </p>
-        <h3 className="line-clamp-2 font-display text-base font-semibold leading-snug text-ink">
+        <h3 className="break-words font-display text-[13px] font-semibold leading-snug text-ink sm:text-base">
           {product?.title}
         </h3>
         {product?.averageReview > 0 && (
@@ -125,13 +125,24 @@ function ProductTile({ product, handleAddtoCart }) {
           </div>
         )}
         <div className="mt-auto flex items-baseline gap-2 pt-2">
-          <span className="font-display text-lg font-bold text-ink">
+          <span className="font-display text-base font-bold text-ink sm:text-lg">
             {formatKES(onSale ? product.salePrice : product?.price)}
           </span>
           {onSale && (
             <span className="text-sm text-muted-foreground line-through">{formatKES(product.price)}</span>
           )}
         </div>
+
+        {/* Phones: full-width add-to-cart under the details (hidden on desktop,
+            where the hover actions above are used) */}
+        <Button
+          size="sm"
+          className="mt-2 w-full rounded-full lg:hidden"
+          disabled={soldOut}
+          onClick={(e) => { e.stopPropagation(); handleAddtoCart?.(product?._id, product?.totalStock); }}
+        >
+          <ShoppingBag className="mr-1.5 h-4 w-4 shrink-0" /> {soldOut ? "Sold out" : "Add to cart"}
+        </Button>
       </div>
     </article>
   );

@@ -1,9 +1,9 @@
 User-agent: *
 Disallow: /admin/
-Disallow: /backend/
-Disallow: /private/
-Disallow: /config/
-Disallow: /scripts/
+Disallow: /auth/
+Disallow: /account/
+Disallow: /checkout/
+Disallow: /payment-success/
 Allow: /
 
-Sitemap: https://rekker.co.ke/sitemap.xml
+Sitemap: https://shop.rekker.co.ke/sitemap.xml

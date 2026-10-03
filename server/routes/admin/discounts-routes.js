@@ -1,0 +1,10 @@
+const express = require("express");
+const c = require("../../controllers/admin/discounts-controller");
+const router = express.Router();
+router.get("/get", c.list);
+router.post("/add", c.create);
+router.put("/edit/:id", c.update);
+router.put("/toggle/:id", c.toggle);
+router.delete("/delete/:id", c.remove);
+router.get("/:id/redemptions", c.redemptions);
+module.exports = router;

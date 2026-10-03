@@ -62,6 +62,10 @@ const adminBundlesRouter = require("./routes/admin/bundles-routes");
 const adminArticlesRouter = require("./routes/admin/articles-routes");
 const adminAnalyticsRouter = require("./routes/admin/analytics-routes");
 const adminBannersRouter = require("./routes/admin/banners-routes");
+const adminDiscountsRouter = require("./routes/admin/discounts-routes");
+const adminFaqsRouter = require("./routes/admin/faqs-routes");
+const shopDiscountRouter = require("./routes/shop/discount-routes");
+const shopAssistantRouter = require("./routes/shop/assistant-routes");
 const adminNotificationsRouter = require("./routes/admin/notifications-routes");
 const shopBannersRouter = require("./routes/shop/banners-routes");
 const wholesaleRouter = require("./routes/common/wholesale-routes");
@@ -202,6 +206,8 @@ app.use("/api/admin/bundles", adminBundlesRouter);
 app.use("/api/admin/articles", adminArticlesRouter);
 app.use("/api/admin/analytics", adminAnalyticsRouter);
 app.use("/api/admin/banners", adminBannersRouter);
+app.use("/api/admin/discounts", adminDiscountsRouter);
+app.use("/api/admin/faqs", adminFaqsRouter);
 app.use("/api/admin/notifications", adminNotificationsRouter);
 
 // Shop
@@ -220,6 +226,8 @@ app.use("/api/shop/promotions", shopPromotionsRouter);
 app.use("/api/shop/bundles", shopBundlesRouter);
 app.use("/api/shop/articles", shopArticlesRouter);
 app.use("/api/shop/banners", shopBannersRouter);
+app.use("/api/shop/discount", shopDiscountRouter);
+app.use("/api/shop/assistant", shopAssistantRouter);
 
 // Wishlist & Common
 app.use("/api/wishlist", wishlistRouter);

@@ -11,6 +11,7 @@ import {
   Tag,
   FolderTree,
   Megaphone,
+  HelpCircle,
   Package,
   Store,
   ChevronRight,
@@ -49,6 +50,11 @@ const navItems = [
     icon: Package,
   },
   {
+    label: "Discount Codes",
+    path: "/admin/discounts",
+    icon: Tag,
+  },
+  {
     label: "Ads & Banners",
     path: "/admin/banners",
     icon: Megaphone,
@@ -57,6 +63,11 @@ const navItems = [
     label: "Wholesale Requests",
     path: "/admin/wholesale",
     icon: Store,
+  },
+  {
+    label: "Chat & FAQs",
+    path: "/admin/faqs",
+    icon: HelpCircle,
   },
   {
     label: "Messages",

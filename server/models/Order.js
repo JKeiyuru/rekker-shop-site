@@ -124,6 +124,12 @@ const OrderSchema = new mongoose.Schema(
     // One-time flags so a retry/webhook can never double-deduct stock or
     // double-alert the admins.
     stockDeducted:   { type: Boolean, default: false },
+
+    // Discount / influencer code applied at checkout (subtotalAmount is BEFORE
+    // the discount; totalAmount = subtotal - discount + delivery)
+    discountCode:     { type: String, default: null },
+    discountAmount:   { type: Number, default: 0 },
+    discountRedeemed: { type: Boolean, default: false },
     adminNotifiedAt: { type: Date, default: null },
 
     // Delivery tracking

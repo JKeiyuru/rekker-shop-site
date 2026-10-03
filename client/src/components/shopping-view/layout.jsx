@@ -4,6 +4,7 @@ import StoreHeader from "./header";
 import StoreFooter from "./footer";
 import MobileBottomNav from "./mobile-bottom-nav";
 import { AnnouncementBar } from "./ad-banners";
+import Concierge from "./concierge";
 
 function ShoppingLayout() {
   // Lifted here (rather than living only inside the header) so the mobile
@@ -26,6 +27,7 @@ function ShoppingLayout() {
         <Outlet />
       </main>
       <StoreFooter />
+      <Concierge />
       <MobileBottomNav
         setOpenCartSheet={setOpenCartSheet}
         setOpenWishlistSheet={setOpenWishlistSheet}

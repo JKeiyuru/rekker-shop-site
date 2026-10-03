@@ -25,6 +25,7 @@ import {
   deleteAddress,
 } from "@/store/shop/address-slice";
 import { clearCart } from "@/store/shop/cart-slice";
+import DiscountBox from "@/components/shopping-view/discount-box";
 import { useToast } from "@/components/ui/use-toast";
 import { Button }    from "@/components/ui/button";
 import { Input }     from "@/components/ui/input";
@@ -96,13 +97,14 @@ function StepIndicator({ currentStep }) {
 }
 
 // ─── Order summary sidebar ────────────────────────────────────────────────────
-function OrderSummary({ cartItems = [], deliveryFee, step }) {
+function OrderSummary({ cartItems = [], deliveryFee, step, discount, onDiscountChange }) {
   const safe     = Array.isArray(cartItems) ? cartItems : [];
   const subtotal = safe.reduce((s, i) => {
     const price = Number(i?.salePrice > 0 ? i.salePrice : i?.price) || 0;
     return s + price * (Number(i?.quantity) || 1);
   }, 0);
-  const total    = subtotal + (deliveryFee || 0);
+  const discountAmt = discount?.discountAmount || 0;
+  const total    = subtotal - discountAmt + (deliveryFee || 0);
 
   return (
     <div className="bg-gray-50 rounded-xl p-5 space-y-4 sticky top-4">
@@ -125,10 +127,16 @@ function OrderSummary({ cartItems = [], deliveryFee, step }) {
         })}
       </div>
       <Separator />
+      {onDiscountChange && <DiscountBox cartItems={safe} discount={discount} onChange={onDiscountChange} />}
       <div className="space-y-1.5 text-sm">
         <div className="flex justify-between text-gray-600">
           <span>Subtotal</span><span>{formatKES(subtotal)}</span>
         </div>
+        {discountAmt > 0 && (
+          <div className="flex justify-between font-medium text-green-700">
+            <span>Discount ({discount.code})</span><span>-{formatKES(discountAmt)}</span>
+          </div>
+        )}
         <div className="flex justify-between text-gray-600">
           <span className="flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> Delivery</span>
           <span>
@@ -238,8 +246,10 @@ function CheckoutPage() {
     const price = Number(i?.salePrice > 0 ? i.salePrice : i?.price) || 0;
     return s + price * (Number(i?.quantity) || 1);
   }, 0);
+  const [discount, setDiscount] = useState(null); // { code, discountAmount, message }
+  const discountAmount   = discount?.discountAmount || 0;
   const finalDeliveryFee = isFreeDelivery ? 0 : deliveryFee || 0;
-  const totalAmount      = subtotal + finalDeliveryFee;
+  const totalAmount      = subtotal - discountAmount + finalDeliveryFee;
 
   // Fetch counties & saved addresses on mount
   useEffect(() => {
@@ -378,6 +388,8 @@ function CheckoutPage() {
         orderStatus:    "pending",
         totalAmount,
         subtotalAmount: subtotal,
+        discountCode:   discount?.code || undefined,
+        discountAmount,
         deliveryFee:    finalDeliveryFee,
         orderDate:      new Date().toISOString(),
       };
@@ -407,6 +419,7 @@ function CheckoutPage() {
             email:          user?.email,
             cartItems:      baseOrderPayload.cartItems,
             addressInfo:    baseOrderPayload.addressInfo,
+            discountCode:   discount?.code || undefined,
             totalAmount,
             subtotalAmount: subtotal,
             deliveryFee:    finalDeliveryFee,
@@ -826,11 +839,21 @@ function CheckoutPage() {
                   })}
                 </div>
 
+                {/* Discount code (phones — the sidebar summary is desktop only) */}
+                <div className="lg:hidden rounded-xl border border-dashed border-gray-300 p-4">
+                  <DiscountBox cartItems={cartItems} discount={discount} onChange={setDiscount} />
+                </div>
+
                 {/* Totals */}
                 <div className="rounded-xl border-2 border-red-100 p-4 space-y-2">
                   <div className="flex justify-between text-sm text-gray-600">
                     <span>Subtotal</span><span>{formatKES(subtotal)}</span>
                   </div>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-sm font-medium text-green-700">
+                      <span>Discount ({discount.code})</span><span>-{formatKES(discountAmount)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm text-gray-600">
                     <span>Delivery</span>
                     <span>
@@ -941,6 +964,8 @@ function CheckoutPage() {
               <OrderSummary
                 cartItems={cartItems}
                 deliveryFee={isFreeDelivery ? 0 : deliveryFee}
+                discount={discount}
+                onDiscountChange={setDiscount}
                 step={step}
               />
             </div>

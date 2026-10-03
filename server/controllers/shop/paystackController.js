@@ -12,6 +12,7 @@ const User = require("../../models/User");
 const { initializeTransaction, verifyTransaction, verifyWebhookSignature } = require("../../helpers/paystack");
 const { priceOrderLines, resolveDeliveryFee, deductStockForOrder } = require("../../helpers/order-pricing");
 const { notifyNewOrder, notifyLowStock } = require("../../helpers/notifications");
+const { evaluateCode, redeemForOrder } = require("../../helpers/discounts");
 
 let sendOrderConfirmationEmail = () => Promise.resolve();
 try {
@@ -42,6 +43,7 @@ const finalizeSuccessfulPayment = async (order, { channel } = {}) => {
   // Deduct stock exactly once (bundles deduct each component product)
   const touched = await deductStockForOrder(order);
 
+  await redeemForOrder(order); // counts the code only once the money is in
   const shouldAlertAdmins = !order.adminNotifiedAt;
   if (shouldAlertAdmins) order.adminNotifiedAt = new Date();
   await order.save();
@@ -67,7 +69,7 @@ const finalizeSuccessfulPayment = async (order, { channel } = {}) => {
 // POST /api/shop/paystack/initialize
 const initializePaystackPayment = async (req, res) => {
   try {
-    const { userId, cartItems, addressInfo, deliveryFee, cartId, email } = req.body;
+    const { userId, cartItems, addressInfo, deliveryFee, cartId, email, discountCode } = req.body;
 
     if (!userId || !cartItems?.length) {
       return res.status(400).json({
@@ -92,7 +94,15 @@ const initializePaystackPayment = async (req, res) => {
       });
     }
     const finalDeliveryFee = await resolveDeliveryFee(addressInfo, deliveryFee);
-    const totalAmount = priced.subtotal + finalDeliveryFee;
+    let discountAmount = 0;
+    let appliedCode = null;
+    if (discountCode) {
+      const ev = await evaluateCode({ code: discountCode, userId, lines: priced.lines, subtotal: priced.subtotal });
+      if (!ev.ok) return res.status(409).json({ success: false, message: ev.error });
+      discountAmount = ev.discountAmount;
+      appliedCode = ev.code.code;
+    }
+    const totalAmount = priced.subtotal - discountAmount + finalDeliveryFee;
 
     const order = new Order({
       userId,
@@ -102,6 +112,8 @@ const initializePaystackPayment = async (req, res) => {
       paymentMethod: "paystack",
       paymentStatus: "pending",
       orderStatus: "pending",
+      discountCode: appliedCode,
+      discountAmount,
       totalAmount,
       subtotalAmount: priced.subtotal,
       deliveryFee: finalDeliveryFee,

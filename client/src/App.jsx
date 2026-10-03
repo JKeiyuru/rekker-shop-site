@@ -44,6 +44,8 @@ const AdminDelivery = lazy(() => import("./pages/admin-view/delivery-locations")
 const AdminMessages = lazy(() => import("./pages/admin-view/messages"));
 const AdminBrands = lazy(() => import("./pages/admin-view/brands"));
 const AdminCategories = lazy(() => import("./pages/admin-view/categories"));
+const AdminDiscounts = lazy(() => import("./pages/admin-view/discounts"));
+const AdminFaqs = lazy(() => import("./pages/admin-view/faqs"));
 const AdminBundles = lazy(() => import("./pages/admin-view/bundles"));
 const AdminBanners = lazy(() => import("./pages/admin-view/banners"));
 const AdminWholesale = lazy(() => import("./pages/admin-view/wholesale"));
@@ -248,6 +250,8 @@ function App() {
             <Route path="brands" element={<AdminBrands />} />
             <Route path="categories" element={<AdminCategories />} />
             <Route path="bundles" element={<AdminBundles />} />
+            <Route path="discounts" element={<AdminDiscounts />} />
+            <Route path="faqs" element={<AdminFaqs />} />
             <Route path="banners" element={<AdminBanners />} />
             <Route path="wholesale" element={<AdminWholesale />} />
           </Route>
