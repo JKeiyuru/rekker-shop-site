@@ -57,7 +57,8 @@ const enrichWithCustomer = async (orders) => {
 
 const getAllOrdersOfAllUsers = async (req, res) => {
   try {
-    const orders = await Order.find({}).sort({ orderDate: -1 });
+    // unpaid / abandoned online-payment attempts are not real orders — keep them out of the list
+    const orders = await Order.find({ $nor: [{ paymentMethod: "paystack", paymentStatus: { $in: ["pending", "failed", "cancelled"] } }] }).sort({ orderDate: -1 });
     if (!orders.length) {
       return res.status(404).json({ success: false, message: "No orders found!" });
     }

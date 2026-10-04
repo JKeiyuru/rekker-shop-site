@@ -127,6 +127,7 @@ const initializePaystackPayment = async (req, res) => {
 
     const baseUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || "https://shop.rekker.co.ke";
     const callbackUrl = `${baseUrl}/payment-success`;
+    const cancelUrl = `${baseUrl}/payment-cancelled?order=${order._id}`;
 
     let init;
     try {
@@ -135,6 +136,7 @@ const initializePaystackPayment = async (req, res) => {
         amountKES: totalAmount,
         reference,
         callbackUrl,
+        cancelUrl,
         metadata: { orderId: order._id.toString(), userId },
       });
     } catch (paystackError) {
@@ -186,11 +188,16 @@ const verifyPaystackPayment = async (req, res) => {
     }
 
     if (txStatus === "abandoned" || txStatus === "failed") {
-      order.paymentStatus = "failed";
+      order.paymentStatus = txStatus === "failed" ? "failed" : "cancelled";
       await order.save();
     }
 
-    return res.status(200).json({ success: false, message: `Payment ${txStatus || "not completed"}`, data: order });
+    return res.status(200).json({
+      success: false,
+      status: txStatus || "pending",
+      message: txStatus === "pending" || !txStatus ? "Your payment is still being processed." : `Payment ${txStatus}`,
+      data: { _id: order._id, totalAmount: order.totalAmount, paymentStatus: order.paymentStatus },
+    });
   } catch (e) {
     console.error("verifyPaystackPayment error:", e);
     return res.status(500).json({ success: false, message: "Internal server error" });
@@ -231,4 +238,95 @@ const handlePaystackWebhook = async (req, res) => {
   }
 };
 
-module.exports = { initializePaystackPayment, verifyPaystackPayment, handlePaystackWebhook };
+// ─── CANCELLED (customer pressed Cancel on Paystack's page) ──────────────────
+// POST /api/shop/paystack/cancel { orderId }
+// Marks the unpaid order as cancelled (so it never shows up as a real order) and
+// returns a summary for the "payment cancelled" page. Safe to call repeatedly.
+const cancelPaystackPayment = async (req, res) => {
+  try {
+    const order = await Order.findById(req.body?.orderId);
+    if (!order || String(order.userId) !== String(req.user?.id)) {
+      return res.status(404).json({ success: false, message: "We couldn't find that order." });
+    }
+    if (order.paymentStatus === "paid") {
+      return res.status(200).json({ success: false, alreadyPaid: true, reference: order.paystackReference, message: "This order has already been paid." });
+    }
+
+    // Double-check with Paystack: the money may have arrived a moment before they cancelled
+    if (order.paystackReference) {
+      try {
+        const v = await verifyTransaction(order.paystackReference);
+        if (v?.data?.status === "success") {
+          await finalizeSuccessfulPayment(order, { channel: v.data.channel });
+          return res.status(200).json({ success: false, alreadyPaid: true, reference: order.paystackReference, message: "Your payment went through." });
+        }
+      } catch (e) { /* Paystack unreachable — treat as cancelled, they can retry */ }
+    }
+
+    if (order.paymentStatus !== "cancelled") {
+      order.paymentStatus = "cancelled";
+      order.orderStatus = "cancelled";
+      await order.save();
+    }
+    return res.status(200).json({
+      success: true,
+      order: { _id: order._id, totalAmount: order.totalAmount, itemCount: (order.cartItems || []).reduce((n, i) => n + (i.quantity || 0), 0) },
+    });
+  } catch (e) {
+    console.error("cancelPaystackPayment error:", e);
+    return res.status(500).json({ success: false, message: "Something went wrong. Your cart is safe." });
+  }
+};
+
+// ─── RETRY (same order, brand-new Paystack payment link) ─────────────────────
+// POST /api/shop/paystack/retry { orderId }
+const retryPaystackPayment = async (req, res) => {
+  try {
+    const order = await Order.findById(req.body?.orderId);
+    if (!order || String(order.userId) !== String(req.user?.id)) {
+      return res.status(404).json({ success: false, message: "We couldn't find that order." });
+    }
+    if (order.paymentStatus === "paid") return res.status(409).json({ success: false, alreadyPaid: true, message: "This order has already been paid." });
+    if (order.paymentMethod !== "paystack") return res.status(400).json({ success: false, message: "This order isn't an online-payment order." });
+
+    // Stock or prices may have changed while they were away — never charge for something we can't deliver
+    const priced = await priceOrderLines((order.cartItems || []).map((i) => ({ productId: i.productId, quantity: i.quantity })));
+    if (priced.errors.length || !priced.lines.length) {
+      return res.status(409).json({ success: false, needsCart: true, message: `${priced.errors[0] || "Some items are no longer available."} Please review your cart.` });
+    }
+    if (priced.subtotal !== order.subtotalAmount) {
+      return res.status(409).json({ success: false, needsCart: true, message: "Some prices have changed since you started checkout. Please review your cart." });
+    }
+
+    const user = await User.findById(order.userId).select("email userName");
+    if (!user?.email) return res.status(400).json({ success: false, message: "No email on your account to send the receipt to." });
+
+    const reference = `RK-${order._id}-${Date.now()}`;
+    const baseUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || "https://shop.rekker.co.ke";
+    let init;
+    try {
+      init = await initializeTransaction({
+        email: user.email,
+        amountKES: order.totalAmount,
+        reference,
+        callbackUrl: `${baseUrl}/payment-success`,
+        cancelUrl: `${baseUrl}/payment-cancelled?order=${order._id}`,
+        metadata: { orderId: order._id.toString(), userId: String(order.userId), retry: true },
+      });
+    } catch (e) {
+      console.error("Paystack retry initialize error:", e?.response?.data || e.message);
+      return res.status(502).json({ success: false, message: "Couldn't reach the payment provider. Please try again in a moment." });
+    }
+
+    order.paystackReference = reference;
+    order.paymentStatus = "pending";
+    order.orderStatus = "pending";
+    await order.save();
+    return res.status(200).json({ success: true, authorizationUrl: init.data.authorization_url, reference });
+  } catch (e) {
+    console.error("retryPaystackPayment error:", e);
+    return res.status(500).json({ success: false, message: "Something went wrong. Please try again." });
+  }
+};
+
+module.exports = { initializePaystackPayment, verifyPaystackPayment, handlePaystackWebhook, cancelPaystackPayment, retryPaystackPayment };

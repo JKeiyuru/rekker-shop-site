@@ -18,6 +18,7 @@ function PaymentSuccessPage() {
   const [status, setStatus] = useState("checking"); // "checking" | "paid" | "failed"
   const [message, setMessage] = useState("");
 
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const reference =
       searchParams.get("reference") ||
@@ -37,6 +38,12 @@ function PaymentSuccessPage() {
           setStatus("paid");
           sessionStorage.removeItem("pendingOrderId");
           sessionStorage.removeItem("pendingOrderReference");
+        } else if (res.data.status === "pending") {
+          setStatus("processing");
+          setMessage(res.data.message || "Your payment is still being processed.");
+        } else if (res.data.data?._id) {
+          // cancelled / abandoned / failed: friendly page with one-tap retry
+          navigate(`/payment-cancelled?order=${res.data.data._id}${res.data.status === "failed" ? "&reason=failed" : ""}`, { replace: true });
         } else {
           setStatus("failed");
           setMessage(res.data.message || "Payment was not completed.");
@@ -46,7 +53,7 @@ function PaymentSuccessPage() {
         setStatus("failed");
         setMessage(err?.response?.data?.message || "Couldn&apos;t verify your payment right now.");
       });
-  }, [searchParams]);
+  }, [searchParams, attempt, navigate]);
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
@@ -58,6 +65,16 @@ function PaymentSuccessPage() {
               <CardTitle className="text-2xl">Confirming your payment...</CardTitle>
             </CardHeader>
             <p className="text-sm text-gray-500">This only takes a moment — don&apos;t close this page.</p>
+          </>
+        )}
+
+        {status === "processing" && (
+          <>
+            <Loader2 className="w-12 h-12 text-amber-600 animate-spin mx-auto" />
+            <CardHeader className="p-0"><CardTitle className="text-2xl">Still processing…</CardTitle></CardHeader>
+            <p className="text-sm text-gray-500">{message} If you approved the payment on your phone, give it a few seconds.</p>
+            <Button className="w-full bg-red-700 hover:bg-red-800" onClick={() => { setStatus("checking"); setAttempt((a) => a + 1); }}>Check again</Button>
+            <Button variant="outline" className="w-full" onClick={() => navigate("/account")}>View My Orders</Button>
           </>
         )}
 
@@ -84,8 +101,8 @@ function PaymentSuccessPage() {
             </CardHeader>
             <p className="text-sm text-gray-500">{message}</p>
             <div className="flex flex-col gap-2">
-              <Button className="w-full bg-red-700 hover:bg-red-800" onClick={() => navigate("/checkout")}>
-                Try Again
+              <Button className="w-full bg-red-700 hover:bg-red-800" onClick={() => navigate("/cart")}>
+                Back to cart
               </Button>
               <a
                 href="https://wa.me/254796183064?text=Hi%20Rekker!%20My%20payment%20didn't%20go%20through."

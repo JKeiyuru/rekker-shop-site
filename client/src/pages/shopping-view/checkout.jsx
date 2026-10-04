@@ -241,6 +241,19 @@ function CheckoutPage() {
   const [showSummary,   setShowSummary]   = useState(false);
   const [redirecting,   setRedirecting]   = useState(false);
 
+  // Browser "Back" from Paystack: clear the "taking you to payment" overlay and reassure the shopper
+  useEffect(() => {
+    const reset = () => setRedirecting(false);
+    const onShow = (e) => { if (e.persisted) reset(); };
+    window.addEventListener("pageshow", onShow);
+    if (sessionStorage.getItem("pendingOrderId")) {
+      sessionStorage.removeItem("pendingOrderId");
+      toast({ title: "Payment not completed", description: "You haven't been charged and your cart is safe. Choose how you'd like to pay." });
+    }
+    return () => window.removeEventListener("pageshow", onShow);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Move smoothly to the step you just opened (not back to the top of the page)
   const firstRun = useRef(true);
   useEffect(() => {

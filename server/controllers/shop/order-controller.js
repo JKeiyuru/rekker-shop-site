@@ -240,7 +240,7 @@ const initiateMpesaPayment = async (req, res) => {
 // ─── USER ORDER QUERIES ───────────────────────────────────────────────────────
 const getAllOrdersByUser = async (req, res) => {
   try {
-    const orders = await Order.find({ userId: req.params.userId }).sort({ orderDate: -1 });
+    const orders = await Order.find({ userId: req.params.userId, $nor: [{ paymentMethod: "paystack", paymentStatus: { $in: ["failed", "cancelled"] } }] }).sort({ orderDate: -1 });
     if (!orders.length) return res.status(404).json({ success: false, message: "No orders found" });
     return res.status(200).json({ success: true, data: orders });
   } catch (e) {

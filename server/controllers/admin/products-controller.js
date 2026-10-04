@@ -1,6 +1,6 @@
 // server/controllers/admin/products-controller.js - Updated for Rekker with Bulk Import
 const XLSX = require("xlsx");
-const { imageUploadUtil } = require("../../helpers/cloudinary");
+const { imageUploadUtil, friendlyUploadError } = require("../../helpers/cloudinary");
 const Product = require("../../models/Product");
 const { resolveProductCatalogRefs, normalizeBrandInput, slugify } = require("../../helpers/catalog-resolver");
 
@@ -19,7 +19,7 @@ const handleImageUpload = async (req, res) => {
     console.error("Image upload error:", error);
     res.status(500).json({
       success: false,
-      message: `Image upload failed: ${error?.message || error?.error?.message || "unknown error"}`,
+      message: friendlyUploadError(error),
     });
   }
 };

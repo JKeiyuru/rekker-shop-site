@@ -37,7 +37,7 @@ const paystackClient = () => {
  * Amount must be in the smallest currency unit — for KES that's cents,
  * i.e. amountInKES * 100.
  */
-const initializeTransaction = async ({ email, amountKES, reference, callbackUrl, metadata }) => {
+const initializeTransaction = async ({ email, amountKES, reference, callbackUrl, cancelUrl, metadata }) => {
   const client = paystackClient();
   const payload = {
     email,
@@ -45,6 +45,8 @@ const initializeTransaction = async ({ email, amountKES, reference, callbackUrl,
     currency: "KES",
     reference,
     callback_url: callbackUrl,
+    // where Paystack sends the customer if they press "Cancel" on its page
+    ...(cancelUrl ? { cancel_action: cancelUrl } : {}),
     // Leaving "channels" broad so the customer picks whichever rail they
     // prefer on Paystack's own checkout page. Which of these actually render
     // depends on what's enabled under Preferences in the Paystack dashboard.

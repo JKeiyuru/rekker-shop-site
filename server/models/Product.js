@@ -126,7 +126,18 @@ const ProductSchema = new mongoose.Schema(
       min: [0, "Sale price cannot be negative"],
       validate: {
         validator: function(value) {
-          return !value || value <= this.price;
+          if (!value) return true;
+          // On findByIdAndUpdate (runValidators) `this` is the Query, not the document,
+          // so `this.price` is undefined. Read the price from the update instead.
+          let price;
+          if (typeof this.getUpdate === "function") {
+            const u = this.getUpdate() || {};
+            price = u.price !== undefined ? u.price : u.$set && u.$set.price;
+            if (price === undefined) return true; // price not being changed — nothing to compare
+          } else {
+            price = this.price;
+          }
+          return Number(value) <= Number(price);
         },
         message: "Sale price should be less than or equal to regular price"
       }

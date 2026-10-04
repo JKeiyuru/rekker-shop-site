@@ -70,6 +70,7 @@ const ProductPage = lazy(() => import("./pages/shopping-view/product-page"));
 const ShoppingCartPage = lazy(() => import("./pages/shopping-view/cart"));
 const ShoppingCheckout = lazy(() => import("./pages/shopping-view/checkout"));
 const ShoppingAccount = lazy(() => import("./pages/shopping-view/account"));
+const PaymentCancelledPage = lazy(() => import("./pages/shopping-view/payment-cancelled"));
 const PaymentSuccessPage = lazy(() => import("./pages/shopping-view/payment-success"));
 
 // Common
@@ -299,6 +300,14 @@ function App() {
               element={
                 <ProtectedRoute isAuthenticated={isAuthenticated}>
                   <ShoppingAccount />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="payment-cancelled"
+              element={
+                <ProtectedRoute isAuthenticated={isAuthenticated}>
+                  <PaymentCancelledPage />
                 </ProtectedRoute>
               }
             />
