@@ -214,6 +214,24 @@ function ShoppingHome() {
         </section>
       )}
 
+      {/* Bundle deals */}
+      {homeBundles.length > 0 && (
+        <section className="container mx-auto px-4 pt-14">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-primary">Save more</p>
+              <h2 className="mt-2 font-display text-3xl font-bold text-ink">Bundle deals</h2>
+            </div>
+            <Button variant="ghost" className="rounded-full" onClick={() => navigate("/deals")}>
+              All bundles <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {homeBundles.map((b) => <BundleCard key={b._id} bundle={b} />)}
+          </div>
+        </section>
+      )}
+
       {/* Featured */}
       <section className="container mx-auto px-4 py-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -260,24 +278,6 @@ function ShoppingHome() {
                 />
               ))}
             </div>
-          </div>
-        </section>
-      )}
-
-      {/* Bundle deals */}
-      {homeBundles.length > 0 && (
-        <section className="container mx-auto px-4 py-16">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.22em] text-primary">Save more</p>
-              <h2 className="mt-2 font-display text-3xl font-bold text-ink">Bundle deals</h2>
-            </div>
-            <Button variant="ghost" className="rounded-full" onClick={() => navigate("/deals")}>
-              All bundles <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
-          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {homeBundles.map((b) => <BundleCard key={b._id} bundle={b} />)}
           </div>
         </section>
       )}

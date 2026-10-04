@@ -12,6 +12,7 @@ import { ArrowUpDownIcon, Filter, Loader2, PackageSearch, X } from "lucide-react
 import ProductFilter from "@/components/shopping-view/filter";
 import LuxuryProductTile from "@/components/shopping-view/product-tile";
 import { WideBanner } from "@/components/shopping-view/ad-banners";
+import DealsRail from "@/components/shopping-view/deals-rail";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -167,6 +168,8 @@ export default function ShoppingListing() {
           </>
         )}
       </header>
+
+      {!search && <DealsRail className="mb-8" subtitle="Save more when you buy together" />}
 
       <div className="grid gap-8 lg:grid-cols-[260px_1fr]">
         <aside className="hidden lg:block">

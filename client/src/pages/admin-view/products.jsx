@@ -300,9 +300,14 @@ function AdminProducts() {
   function handleEdit(productData) {
     console.log("Handling edit with data:", productData);
     
+    if (!productData._id) {
+      toast({ title: "Can't edit this product", description: "Its ID is missing — refresh the page and try again.", variant: "destructive" });
+      return;
+    }
     setFormData(normaliseForEdit(productData));
     setUploadedImageUrl(productData.image || "");
-    setCurrentEditedId(productData._id || null);
+    setImageFile(null);
+    setCurrentEditedId(productData._id);
     setOpenCreateProductsDialog(true);
   }
 

@@ -14,12 +14,17 @@ const initialState = {
 
 export const addToCart = createAsyncThunk(
   "cart/addToCart",
-  async ({ userId, productId, quantity }) => {
-    const response = await axios.post(
+  async ({ userId, productId, quantity }, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(
       `${API_BASE_URL}/api/shop/cart/add`,
       { userId, productId, quantity }
     );
-    return response.data;
+      return response.data;
+    } catch (err) {
+      // e.g. "Only 3 of this item left in stock." — hand the message to the UI
+      return rejectWithValue(err.response?.data || { success: false, message: "Network error — please try again." });
+    }
   }
 );
 
@@ -35,22 +40,32 @@ export const fetchCartItems = createAsyncThunk(
 
 export const deleteCartItem = createAsyncThunk(
   "cart/deleteCartItem",
-  async ({ userId, productId }) => {
-    const response = await axios.delete(
+  async ({ userId, productId }, { rejectWithValue }) => {
+    try {
+      const response = await axios.delete(
       `${API_BASE_URL}/api/shop/cart/${userId}/${productId}`
     );
-    return response.data;
+      return response.data;
+    } catch (err) {
+      // e.g. "Only 3 of this item left in stock." — hand the message to the UI
+      return rejectWithValue(err.response?.data || { success: false, message: "Network error — please try again." });
+    }
   }
 );
 
 export const updateCartQuantity = createAsyncThunk(
   "cart/updateCartQuantity",
-  async ({ userId, productId, quantity }) => {
-    const response = await axios.put(
+  async ({ userId, productId, quantity }, { rejectWithValue }) => {
+    try {
+      const response = await axios.put(
       `${API_BASE_URL}/api/shop/cart/update-cart`,
       { userId, productId, quantity }
     );
-    return response.data;
+      return response.data;
+    } catch (err) {
+      // e.g. "Only 3 of this item left in stock." — hand the message to the UI
+      return rejectWithValue(err.response?.data || { success: false, message: "Network error — please try again." });
+    }
   }
 );
 
@@ -71,8 +86,7 @@ const shoppingCartSlice = createSlice({
         state.cartItems = action.payload.data;
       })
       .addCase(addToCart.rejected, (state) => {
-        state.isLoading = false;
-        state.cartItems = [];
+        state.isLoading = false; // a refused request must not wipe the cart
       })
       .addCase(fetchCartItems.pending,  (state) => { state.isLoading = true; })
       .addCase(fetchCartItems.fulfilled, (state, action) => {
@@ -89,8 +103,7 @@ const shoppingCartSlice = createSlice({
         state.cartItems = action.payload.data;
       })
       .addCase(updateCartQuantity.rejected, (state) => {
-        state.isLoading = false;
-        state.cartItems = [];
+        state.isLoading = false; // a refused request must not wipe the cart
       })
       .addCase(deleteCartItem.pending,  (state) => { state.isLoading = true; })
       .addCase(deleteCartItem.fulfilled, (state, action) => {
@@ -98,8 +111,7 @@ const shoppingCartSlice = createSlice({
         state.cartItems = action.payload.data;
       })
       .addCase(deleteCartItem.rejected, (state) => {
-        state.isLoading = false;
-        state.cartItems = [];
+        state.isLoading = false; // a refused request must not wipe the cart
       });
   },
 });

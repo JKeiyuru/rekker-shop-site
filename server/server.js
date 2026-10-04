@@ -164,10 +164,13 @@ app.use(express.urlencoded({ extended: true }));
 // Rate Limiting
 const rateLimit = require("express-rate-limit");
 const limiter = rateLimit({ 
-  windowMs: 15 * 60 * 1000, 
-  max: 200,
+  windowMs: 15 * 60 * 1000,
+  max: 1500, // many Kenyan mobile users share one IP, and the admin bell polls every 20s
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path.startsWith("/api/admin/notifications") || req.path.startsWith("/api/shop/banners"),
+  // JSON message so the site can show a readable error instead of "failed"
+  message: { success: false, message: "Too many requests — please wait a minute and try again." },
 });
 app.use(limiter);
 

@@ -67,6 +67,7 @@ const SearchProducts = lazy(() => import("./pages/shopping-view/search"));
 const ProductPage = lazy(() => import("./pages/shopping-view/product-page"));
 
 // Shop - Protected
+const ShoppingCartPage = lazy(() => import("./pages/shopping-view/cart"));
 const ShoppingCheckout = lazy(() => import("./pages/shopping-view/checkout"));
 const ShoppingAccount = lazy(() => import("./pages/shopping-view/account"));
 const PaymentSuccessPage = lazy(() => import("./pages/shopping-view/payment-success"));
@@ -207,7 +208,7 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col overflow-x-hidden bg-white">
+    <div className="flex flex-col [overflow-x:clip] bg-white">
       {/* overflow-x-hidden (not overflow-hidden) — clipping vertical overflow
           here silently breaks position:sticky on the header, since ANY
           ancestor with overflow other than visible does that, even when it
@@ -277,6 +278,14 @@ function App() {
             <Route path="search" element={<SearchProducts />} />
 
             {/* Protected */}
+            <Route
+              path="cart"
+              element={
+                <ProtectedRoute isAuthenticated={isAuthenticated}>
+                  <ShoppingCartPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="checkout"
               element={

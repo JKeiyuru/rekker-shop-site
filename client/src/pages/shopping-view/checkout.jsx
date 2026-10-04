@@ -9,7 +9,7 @@
 //   • Same order logic as before: COD or Paystack (M-Pesa / card / Airtel Money),
 //     prices are always re-calculated on the server.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -104,7 +104,7 @@ function Progress({ step, onGo }) {
 function StepCard({ n, title, icon: Icon, step, summary, onEdit, children }) {
   const state = step === n ? "active" : step > n ? "done" : "locked";
   return (
-    <section className={`overflow-hidden rounded-3xl border bg-card transition ${state === "active" ? "border-primary/30 shadow-xl shadow-black/5" : "border-border"} ${state === "locked" ? "opacity-60" : ""}`}>
+    <section id={`checkout-step-${n}`} className={`scroll-mt-4 overflow-hidden rounded-3xl border bg-card transition ${state === "active" ? "border-primary/30 shadow-xl shadow-black/5" : "border-border"} ${state === "locked" ? "opacity-60" : ""}`}>
       <header className="flex items-center gap-3 px-5 py-4 sm:px-7 sm:py-5">
         <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold ${state === "done" ? "bg-primary text-primary-foreground" : state === "active" ? "bg-ink text-ink-foreground" : "bg-secondary text-muted-foreground"}`}>
           {state === "done" ? <Check className="h-4 w-4" /> : n}
@@ -239,6 +239,17 @@ function CheckoutPage() {
   const [placedOrder,   setPlacedOrder]   = useState(null);
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [showSummary,   setShowSummary]   = useState(false);
+  const [redirecting,   setRedirecting]   = useState(false);
+
+  // Move smoothly to the step you just opened (not back to the top of the page)
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    requestAnimationFrame(() => {
+      if (step === 4) window.scrollTo({ top: 0, behavior: "smooth" });
+      else document.getElementById(`checkout-step-${step}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [step]);
 
   // Saved address mode
   const [selectedSavedAddress, setSelectedSavedAddress] = useState(null);
@@ -418,7 +429,7 @@ function CheckoutPage() {
         );
         if (res.data.success) {
           dispatch(clearCart());
-          setPlacedOrder({ ...baseOrderPayload, _id: res.data.orderId });
+          setPlacedOrder({ ...baseOrderPayload, _id: res.data.orderId, snapshot: cartItems, finalTotal: res.data.order?.totalAmount ?? totalAmount });
           setStep(4);
         } else {
           throw new Error(res.data.message || "Failed to place order");
@@ -442,7 +453,7 @@ function CheckoutPage() {
           { withCredentials: true }
         );
         if (res.data.success && res.data.authorizationUrl) {
-          dispatch(clearCart());
+          setRedirecting(true); // full-screen "taking you to payment" — the cart is cleared by the server once paid
           sessionStorage.setItem("pendingOrderId", res.data.orderId);
           sessionStorage.setItem("pendingOrderReference", res.data.reference);
           window.location.href = res.data.authorizationUrl;
@@ -452,6 +463,7 @@ function CheckoutPage() {
       }
 
     } catch (err) {
+      setRedirecting(false);
       toast({
         title:   err.response?.data?.message || err.message || "Something went wrong",
         variant: "destructive",
@@ -464,7 +476,11 @@ function CheckoutPage() {
   const buildWhatsAppLink = () => {
     const orderId = placedOrder?._id?.toString().slice(-8).toUpperCase() || "NEW";
 
-    const itemLines = cartItems
+    const lines = placedOrder?.snapshot || cartItems;
+    const total = placedOrder?.finalTotal ?? totalAmount;
+    const sub = placedOrder?.subtotalAmount ?? subtotal;
+    const fee = placedOrder?.deliveryFee ?? finalDeliveryFee;
+    const itemLines = lines
       .map((item) => {
         const price = Number(item?.salePrice > 0 ? item.salePrice : item?.price) || 0;
         const quantity = Number(item?.quantity) || 1;
@@ -475,9 +491,9 @@ function CheckoutPage() {
     const msg = encodeURIComponent(
       `Hi Rekker! I just placed order #${orderId}.\n\n` +
       `${itemLines}\n\n` +
-      `Subtotal: ${formatKES(subtotal)}\n` +
-      `Delivery: ${finalDeliveryFee === 0 ? "Free" : formatKES(finalDeliveryFee)}\n` +
-      `Total: ${formatKES(totalAmount)}\n\n` +
+      `Subtotal: ${formatKES(sub)}\n` +
+      `Delivery: ${fee === 0 ? "Free" : formatKES(fee)}\n` +
+      `Total: ${formatKES(total)}\n\n` +
       `Payment: ${paymentMethod === "cod" ? "Cash on Delivery" : "Paid Online (Paystack)"}\n` +
       `Delivery to: ${address.location}, ${address.subCounty}, ${address.county}`
     );
@@ -496,7 +512,7 @@ function CheckoutPage() {
     );
   }
 
-  if (cartItems.length === 0 && step < 4) {
+  if (cartItems.length === 0 && step < 4 && !redirecting) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-secondary/40 px-4">
         <div className="max-w-md text-center">
@@ -512,8 +528,7 @@ function CheckoutPage() {
   const savedAddresses = addressList || [];
   const canSaveMore = savedAddresses.length < MAX_SAVED_ADDRESSES;
   const hasFee = deliveryFee !== null && !!address.location;
-  const goTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
-  const next = (n) => { setStep(n); goTop(); };
+  const next = (n) => setStep(n);
   const summaryProps = { cartItems, subtotal, discount, discountAmt: discountAmount, deliveryFee: finalDeliveryFee, isFree: isFreeDelivery, hasFee, total: totalAmount, onDiscountChange: setDiscount };
   const orderRef = placedOrder?._id ? placedOrder._id.toString().slice(-8).toUpperCase() : null;
 
@@ -532,7 +547,7 @@ function CheckoutPage() {
             {orderRef && <p className="mt-4 inline-block rounded-full bg-secondary px-4 py-1.5 text-sm font-semibold tracking-wider text-ink">ORDER #{orderRef}</p>}
             {paymentMethod === "cod" && (
               <p className="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Please have <strong>{formatKES(totalAmount)}</strong> ready. Our team will call <strong>{address.phone}</strong> before delivery.
+                Please have <strong>{formatKES(placedOrder?.finalTotal ?? totalAmount)}</strong> ready. Our team will call <strong>{address.phone}</strong> before delivery.
               </p>
             )}
           </div>
@@ -564,6 +579,13 @@ function CheckoutPage() {
   // ═════════════════════════ CHECKOUT ════════════════════════════════════════
   return (
     <div className="min-h-screen bg-secondary/40">
+      {redirecting && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-background/95 px-6 text-center backdrop-blur">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="font-display text-xl font-bold text-ink">Taking you to secure payment…</p>
+          <p className="max-w-xs text-sm text-muted-foreground">Please don't close or refresh this page.</p>
+        </div>
+      )}
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">

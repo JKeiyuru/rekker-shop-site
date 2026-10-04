@@ -23,7 +23,7 @@ function MobileBottomNav({ setOpenCartSheet, setOpenWishlistSheet }) {
     { id: "shop", label: "Shop", icon: LayoutGrid, active: isActive("/products") || location.pathname.startsWith("/brands"), onClick: () => navigate("/products") },
     { id: "search", label: "Search", icon: Search, active: isActive("/search"), onClick: () => navigate("/search") },
     { id: "wishlist", label: "Wishlist", icon: Heart, count: wishlistCount, onClick: () => setOpenWishlistSheet(true) },
-    { id: "cart", label: "Cart", icon: ShoppingBag, count: cartCount, onClick: () => setOpenCartSheet(true) },
+    { id: "cart", label: "Cart", icon: ShoppingBag, count: cartCount, active: isActive("/cart"), onClick: () => navigate("/cart") },
   ];
 
   return (

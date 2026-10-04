@@ -19,6 +19,7 @@ function AdminProductTile({
     
     // Create a deep copy of the product data for editing
     const productData = {
+      _id: product._id,
       brand: product.brand || "",
       image: product.image || "",
       title: product.title || "",

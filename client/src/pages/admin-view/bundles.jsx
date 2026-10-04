@@ -239,6 +239,17 @@ export default function AdminBundles() {
             <div>
               <Label>Picture <span className="text-gray-400 font-normal">(optional — we use the product photos if empty)</span></Label>
               <ImagePicker aspect="aspect-[16/7]" value={form.images[0] || ""} onChange={(u) => set("images", u ? [u] : [])} label="Upload a bundle picture" />
+              {form.items.length > 0 && (
+                <div className="mt-2">
+                  <p className="mb-1 text-xs text-gray-500">Or use one of the product photos:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {form.items.map((i) => {
+                      const p = byId[i.productId]; const src = p?.image || p?.images?.[0];
+                      return src ? <button type="button" key={i.productId} onClick={() => set("images", [src])} title={p.title} className="h-14 w-14 overflow-hidden rounded-lg border-2 border-transparent hover:border-gray-900"><img src={src} alt="" className="h-full w-full object-cover" /></button> : null;
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between rounded-lg border p-3">
