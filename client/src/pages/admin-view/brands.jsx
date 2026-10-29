@@ -2,6 +2,7 @@
 // Admin page to manage storefront Brand records (Bio Saff, Saffron, Cornells, etc.)
 
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   fetchAllAdminBrands,
@@ -27,11 +28,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Pencil, Trash2, Plus, Tag, Search, RefreshCw } from "lucide-react";
+import ImagePicker from "@/components/admin-view/image-picker";
+import { Pencil, Trash2, Plus, Tag, Search, RefreshCw, Megaphone, Link2, Star } from "lucide-react";
 
 const emptyForm = {
   name: "", slug: "", tagline: "", description: "", story: "",
   logoUrl: "", bannerUrl: "", themeColor: "#000000",
+  category: "", highlightsText: "", isFeatured: false, showNewBadge: false,
   isActive: true, sortOrder: 0,
 };
 
@@ -47,6 +50,7 @@ function AdminBrands() {
   const dispatch = useDispatch();
   const { brandList, isLoading } = useSelector((state) => state.adminBrands);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -85,6 +89,10 @@ function AdminBrands() {
       logoUrl: brand.logoUrl || "",
       bannerUrl: brand.bannerUrl || "",
       themeColor: brand.themeColor || "#000000",
+      category: brand.category || "",
+      highlightsText: (brand.highlights || []).join("\n"),
+      isFeatured: !!brand.isFeatured,
+      showNewBadge: !!brand.showNewBadge,
       isActive: brand.isActive ?? true,
       sortOrder: brand.sortOrder ?? 0,
     });
@@ -106,7 +114,13 @@ function AdminBrands() {
       toast({ title: "Name and slug are required", variant: "destructive" });
       return;
     }
-    const payload = { ...form, sortOrder: Number(form.sortOrder) || 0, slug: slugify(form.slug) };
+    const { highlightsText, ...rest } = form;
+    const payload = {
+      ...rest,
+      highlights: highlightsText.split("\n").map((l) => l.trim()).filter(Boolean),
+      sortOrder: Number(form.sortOrder) || 0,
+      slug: slugify(form.slug),
+    };
     const result = editId
       ? await dispatch(editBrand({ id: editId, formData: payload }))
       : await dispatch(addNewBrand(payload));
@@ -133,13 +147,20 @@ function AdminBrands() {
 
   const totalActive = brandList.filter((b) => b.isActive).length;
 
+  // a shareable link to this brand's products, e.g. https://shop.rekker.co.ke/products?brand=petcare
+  const copyProductsLink = async (brand) => {
+    const url = `${window.location.origin}/products?brand=${brand.slug}`;
+    try { await navigator.clipboard.writeText(url); toast({ title: "Link copied", description: url }); }
+    catch { toast({ title: "Products link", description: url }); }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Brands</h1>
           <p className="text-muted-foreground mt-1">
-            Manage storefront brands shown across Rekker Shop
+            Manage the brands shown on the shop and the corporate site — brands pages, home hero spotlight and links
           </p>
         </div>
         <Button onClick={handleOpenCreate} className="gap-2">
@@ -219,6 +240,8 @@ function AdminBrands() {
                           style={{ backgroundColor: brand.themeColor || "#000" }}
                         />
                         {brand.name}
+                        {brand.isFeatured && <Badge className="gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100"><Star className="w-3 h-3" /> Spotlight</Badge>}
+                        {brand.showNewBadge && <Badge variant="outline">New</Badge>}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{brand.slug}</TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[220px] truncate">
@@ -231,7 +254,13 @@ function AdminBrands() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" title="Copy link to this brand's products" onClick={() => copyProductsLink(brand)}>
+                            <Link2 className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Create a pop-up for this brand" onClick={() => navigate(`/admin/banners?new=popup&brand=${brand.slug}`)}>
+                            <Megaphone className="w-4 h-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(brand)}>
                             <Pencil className="w-4 h-4" />
                           </Button>
@@ -289,6 +318,15 @@ function AdminBrands() {
             </div>
 
             <div className="space-y-1">
+              <Label>Category</Label>
+              <Input
+                placeholder="e.g. Pet Care, Home & Cleaning, Fragrance"
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-1">
               <Label>Description</Label>
               <Textarea
                 placeholder="Short description shown on brand cards..."
@@ -308,22 +346,25 @@ function AdminBrands() {
               />
             </div>
 
+            <div className="space-y-1">
+              <Label>Highlights (one per line)</Label>
+              <Textarea
+                placeholder={"Premium pet shampoo\nDeveloped with pet safety in mind"}
+                value={form.highlightsText}
+                onChange={(e) => setForm({ ...form, highlightsText: e.target.value })}
+                rows={4}
+              />
+              <p className="text-xs text-muted-foreground">Shown as bullet points on the brands pages.</p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label>Logo URL</Label>
-                <Input
-                  placeholder="https://..."
-                  value={form.logoUrl}
-                  onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
-                />
+                <Label>Logo</Label>
+                <ImagePicker aspect="aspect-[4/3]" value={form.logoUrl} onChange={(u) => setForm({ ...form, logoUrl: u })} label="Upload logo" />
               </div>
               <div className="space-y-1">
-                <Label>Banner URL</Label>
-                <Input
-                  placeholder="https://..."
-                  value={form.bannerUrl}
-                  onChange={(e) => setForm({ ...form, bannerUrl: e.target.value })}
-                />
+                <Label>Banner</Label>
+                <ImagePicker aspect="aspect-[8/3]" value={form.bannerUrl} onChange={(u) => setForm({ ...form, bannerUrl: u })} label="Upload banner" hint="1600 × 600" />
               </div>
             </div>
 
@@ -350,6 +391,23 @@ function AdminBrands() {
                   value={form.sortOrder}
                   onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
                 />
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-start gap-3">
+                <Switch checked={form.isFeatured} onCheckedChange={(v) => setForm({ ...form, isFeatured: v })} />
+                <div>
+                  <Label>Spotlight on the home page hero</Label>
+                  <p className="text-xs text-muted-foreground">Shows this brand as the large card in the hero on the shop and the corporate site, and puts it first on the brands pages.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Switch checked={form.showNewBadge} onCheckedChange={(v) => setForm({ ...form, showNewBadge: v })} />
+                <div>
+                  <Label>Show a “New” badge</Label>
+                  <p className="text-xs text-muted-foreground">Adds a “New brand” ribbon on the cards and brands pages.</p>
+                </div>
               </div>
             </div>
 

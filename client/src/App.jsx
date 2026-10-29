@@ -62,6 +62,8 @@ const BrandsOverview = lazy(() => import("./pages/shopping-view/brands-overview"
 const SaffronBrand = lazy(() => import("./pages/shopping-view/brands/saffron"));
 const CornellsBrand = lazy(() => import("./pages/shopping-view/brands/cornells"));
 const BioSaffBrand = lazy(() => import("./pages/shopping-view/brands/bio-saff"));
+// PetCare (written page) + every other brand added in Admin → Brands (generic page)
+const BrandPage = lazy(() => import("./pages/shopping-view/brands/brand-page"));
 const ShoppingListing = lazy(() => import("./pages/shopping-view/listing"));
 const SearchProducts = lazy(() => import("./pages/shopping-view/search"));
 const ProductPage = lazy(() => import("./pages/shopping-view/product-page"));
@@ -273,6 +275,8 @@ function App() {
             <Route path="brands/cornells" element={<CornellsBrand />} />
             <Route path="brands/bio-saff" element={<BioSaffBrand />} />
             <Route path="brands/biosaff" element={<Navigate to="/brands/bio-saff" replace />} />
+            <Route path="brands/saffron-milan" element={<Navigate to="/brands/saffron" replace />} />
+            <Route path="brands/:slug" element={<BrandPage />} />
             <Route path="products" element={<ShoppingListing />} />
             <Route path="product/:id" element={<ProductPage />} />
             <Route path="listing" element={<Navigate to="/products" replace />} />

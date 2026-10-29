@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { Mail, Phone, MapPin } from "lucide-react";
+import useBrands from "@/hooks/use-brands";
+import { sortBrands, brandPagePath, isKnownBrand } from "@/lib/brand-utils";
 
 const columns = [
   {
@@ -9,6 +11,7 @@ const columns = [
       { label: "Bundle deals", to: "/deals" },
       { label: "Saffron Milan", to: "/brands/saffron" },
       { label: "Cornells", to: "/brands/cornells" },
+      { label: "All brands", to: "/brands" },
       { label: "Search", to: "/search" },
     ],
   },
@@ -33,6 +36,10 @@ const columns = [
 ];
 
 function StoreFooter() {
+  // brands added in Admin → Brands (e.g. PetCare) get their own footer link automatically
+  const { brands } = useBrands();
+  const extra = sortBrands(brands.filter((b) => !isKnownBrand(b))).map((b) => ({ label: b.name, to: brandPagePath(b) }));
+  const cols = columns.map((c) => (c.title === "Shop" ? { ...c, links: [...c.links.slice(0, 4), ...extra, ...c.links.slice(4)] } : c));
   return (
     <footer className="mt-24 bg-ink text-ink-foreground">
       <div className="container mx-auto grid gap-12 px-4 py-16 md:grid-cols-[1.4fr_repeat(3,1fr)]">
@@ -52,7 +59,7 @@ function StoreFooter() {
           </div>
         </div>
 
-        {columns.map((col) => (
+        {cols.map((col) => (
           <div key={col.title}>
             <h3 className="font-display text-sm uppercase tracking-[0.2em] text-white/40">{col.title}</h3>
             <ul className="mt-5 space-y-3 text-sm">

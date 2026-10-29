@@ -1,13 +1,16 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/no-unescaped-entities */
 import { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   FaGlobe, FaAward, FaCertificate, FaIndustry, 
   FaLeaf, FaHeart, FaFlask, FaStar, FaUsers,
   FaChevronDown, FaMapMarkerAlt, FaChartLine,
   FaMagic, FaTint, FaSprayCan, FaCut
 } from "react-icons/fa";
+import useBrands from "@/hooks/use-brands";
+import BrandShowcase from "@/components/shopping-view/brand-showcase";
+import { anchorId, findBrand, isKnownBrand, productsPath, sortBrands } from "@/lib/brand-utils";
 
 const BrandsOverview = () => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -16,6 +19,11 @@ const BrandsOverview = () => {
   const saffronRef = useRef(null);
   const cornellsRef = useRef(null);
   const bioSaffRef = useRef(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  // brands added in Admin → Brands (PetCare, …) that have no hand-written section
+  const { brands: apiBrands, loaded: brandsLoaded } = useBrands();
+  const extraBrands = sortBrands(apiBrands.filter((b) => !isKnownBrand(b)));
 
   useEffect(() => {
     setIsLoaded(true);
@@ -49,6 +57,18 @@ const BrandsOverview = () => {
       description: "Rekker's own premium cosmetics and body care line — hair, braid and body essentials manufactured in Kenya",
       color: "from-ink via-black to-primary"
     }
+  ];
+
+  // one extra hero slide per admin-created brand (uses the brand's theme colour)
+  const allSlides = [
+    ...brandSlides,
+    ...extraBrands.map((b) => ({
+      brand: b.name,
+      tagline: b.tagline || b.category || "A Rekker brand",
+      description: b.description || "",
+      color: "",
+      style: { background: `linear-gradient(135deg, ${/^#[0-9a-f]{6}$/i.test(b.themeColor || "") && b.themeColor !== "#000000" ? b.themeColor : "#14532d"}, #0b0b0b)` },
+    })),
   ];
 
   const saffronStory = {
@@ -248,14 +268,32 @@ const BrandsOverview = () => {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setActiveSlide((prev) => (prev + 1) % brandSlides.length);
+      setActiveSlide((prev) => (prev + 1) % allSlides.length);
     }, 6000);
     return () => clearInterval(timer);
-  }, [brandSlides.length]);
+  }, [allSlides.length]);
 
-  const scrollToSection = (ref) => {
-    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Direct links: /brands#petcare, /brands#saffron, /brands?brand=bio-saff … all scroll to that brand.
+  // Clicking a hero button updates the address bar the same way, so the link can be copied and shared.
+  const sectionFor = (key) => document.getElementById(anchorId(key));
+  const goTo = (key) => {
+    navigate({ pathname: "/brands", hash: `#${anchorId(key)}` }, { replace: true });
+    sectionFor(key)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+  const wanted = (new URLSearchParams(location.search).get("brand") || location.hash.replace(/^#/, "")).trim();
+  const scrolledFor = useRef("");
+  useEffect(() => {
+    if (!wanted || scrolledFor.current === `${wanted}|${extraBrands.length}`) return;
+    const el = sectionFor(wanted);
+    if (!el) return; // admin-created brand sections appear once the list has loaded
+    scrolledFor.current = `${wanted}|${extraBrands.length}`;
+    const t = setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+    return () => clearTimeout(t);
+  }, [wanted, brandsLoaded, extraBrands.length]);
+
+  // Saffron / Cornells / Bio Saff keep their hand-written sections; their product filters use the admin slugs
+  const slugFor = (key) => findBrand(apiBrands, key)?.slug || key;
+  const shopLink = (key) => productsPath({ slug: slugFor(key) });
 
   return (
     <div className="min-h-screen bg-white">
@@ -270,14 +308,14 @@ const BrandsOverview = () => {
       {/* Hero Section - Minimalist & Elegant */}
       <div className={`relative h-screen transition-all duration-1000 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
         <div className="absolute inset-0 overflow-hidden">
-          {brandSlides.map((slide, index) => (
+          {allSlides.map((slide, index) => (
             <div
               key={index}
               className={`absolute inset-0 transition-opacity duration-1000 ${
                 index === activeSlide ? 'opacity-100' : 'opacity-0'
               }`}
             >
-              <div className={`absolute inset-0 bg-gradient-to-br ${slide.color}`}>
+              <div className={`absolute inset-0 bg-gradient-to-br ${slide.color}`} style={slide.style}>
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent_50%)]" />
                 <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.05)_25%,rgba(255,255,255,0.05)_50%,transparent_50%,transparent_75%,rgba(255,255,255,0.05)_75%)] bg-[length:60px_60px]" />
               </div>
@@ -291,39 +329,48 @@ const BrandsOverview = () => {
               <div className="mb-8 animate-fade-in">
                 <div className="inline-block mb-4">
                   <span className="text-sm font-semibold tracking-[0.3em] uppercase opacity-90">
-                    Two Brands. One Promise.
+                    Our Brands. One Promise.
                   </span>
                 </div>
                 <h1 className="text-7xl md:text-8xl font-bold mb-6 tracking-tight leading-none">
-                  {brandSlides[activeSlide].brand}
+                  {allSlides[activeSlide].brand}
                 </h1>
                 <p className="text-2xl md:text-3xl font-light mb-4 tracking-wide">
-                  {brandSlides[activeSlide].tagline}
+                  {allSlides[activeSlide].tagline}
                 </p>
                 <p className="text-lg md:text-xl opacity-90 max-w-3xl mx-auto leading-relaxed font-light">
-                  {brandSlides[activeSlide].description}
+                  {allSlides[activeSlide].description}
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-12">
                 <button
-                  onClick={() => scrollToSection(saffronRef)}
+                  onClick={() => goTo("saffron")}
                   className="group px-8 py-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-full font-medium transition-all duration-300 hover:bg-white hover:text-gray-900 min-w-[200px]"
                 >
                   Discover Saffron
                 </button>
                 <button
-                  onClick={() => scrollToSection(cornellsRef)}
+                  onClick={() => goTo("cornells")}
                   className="group px-8 py-4 bg-white text-gray-900 rounded-full font-medium transition-all duration-300 hover:bg-white/90 hover:scale-105 min-w-[200px]"
                 >
                   Explore Cornells
                 </button>
                 <button
-                  onClick={() => scrollToSection(bioSaffRef)}
+                  onClick={() => goTo("biosaff")}
                   className="group px-8 py-4 bg-primary text-primary-foreground rounded-full font-medium transition-all duration-300 hover:bg-primary/90 hover:scale-105 min-w-[200px]"
                 >
                   Discover Bio Saff
                 </button>
+                {extraBrands.map((b) => (
+                  <button
+                    key={b._id}
+                    onClick={() => goTo(b.slug)}
+                    className="group px-8 py-4 bg-white/10 backdrop-blur-md border border-white/40 rounded-full font-medium transition-all duration-300 hover:bg-white hover:text-gray-900 min-w-[200px]"
+                  >
+                    {b.showNewBadge ? "New: " : "Discover "}{b.name}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -339,7 +386,7 @@ const BrandsOverview = () => {
 
         {/* Slide Indicators */}
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex gap-3 z-30">
-          {brandSlides.map((_, index) => (
+          {allSlides.map((_, index) => (
             <button
               key={index}
               onClick={() => setActiveSlide(index)}
@@ -374,7 +421,7 @@ const BrandsOverview = () => {
       </section>
 
       {/* Saffron Brand Section */}
-      <section ref={saffronRef} className="py-32 bg-gradient-to-br from-orange-50 via-amber-50 to-red-50">
+      <section id="saffronmilan" ref={saffronRef} className="scroll-mt-20 py-32 bg-gradient-to-br from-orange-50 via-amber-50 to-red-50">
         <div className="container mx-auto px-6">
           <div className="max-w-7xl mx-auto">
             {/* Saffron Hero */}
@@ -393,6 +440,9 @@ const BrandsOverview = () => {
               <p className="text-xl text-gray-600 max-w-4xl mx-auto leading-relaxed">
                 {saffronStory.hero.description}
               </p>
+              <Link to={shopLink("saffron")} className="mt-8 inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-8 py-4 font-bold shadow-lg transition-all hover:scale-105">
+                Shop Saffron Milan products &rarr;
+              </Link>
             </div>
 
             {/* Core Pillars */}
@@ -458,7 +508,7 @@ const BrandsOverview = () => {
       <div className="h-32 bg-gradient-to-b from-red-50 to-purple-50" />
 
       {/* Cornells Brand Section */}
-      <section ref={cornellsRef} className="py-32 bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50">
+      <section id="cornells" ref={cornellsRef} className="scroll-mt-20 py-32 bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50">
         <div className="container mx-auto px-6">
           <div className="max-w-7xl mx-auto">
             {/* Cornells Hero */}
@@ -477,6 +527,9 @@ const BrandsOverview = () => {
               <p className="text-xl text-gray-600 max-w-4xl mx-auto leading-relaxed">
                 {cornellsStory.hero.description}
               </p>
+              <Link to={shopLink("cornells")} className="mt-8 inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-8 py-4 font-bold shadow-lg transition-all hover:scale-105">
+                Shop Cornells products &rarr;
+              </Link>
             </div>
 
             {/* Global Stats */}
@@ -585,7 +638,7 @@ const BrandsOverview = () => {
       <div className="h-32 bg-gradient-to-b from-purple-50 to-black" />
 
       {/* Bio Saff Brand Section */}
-      <section ref={bioSaffRef} className="py-32 bg-ink text-ink-foreground">
+      <section id="biosaff" ref={bioSaffRef} className="scroll-mt-20 py-32 bg-ink text-ink-foreground">
         <div className="container mx-auto px-6">
           <div className="max-w-7xl mx-auto">
             {/* Bio Saff Hero */}
@@ -607,6 +660,9 @@ const BrandsOverview = () => {
               <p className="text-xl text-white/60 max-w-4xl mx-auto leading-relaxed">
                 {bioSaffStory.hero.description}
               </p>
+              <Link to={shopLink("biosaff")} className="mt-8 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-8 py-4 font-bold shadow-lg transition-all hover:scale-105">
+                Shop Bio Saff products &rarr;
+              </Link>
             </div>
 
             {/* Core Pillars */}
@@ -674,6 +730,9 @@ const BrandsOverview = () => {
         </div>
       </section>
 
+      {/* Brands added in Admin → Brands (PetCare, …) */}
+      {extraBrands.map((b) => <BrandShowcase key={b._id} brand={b} />)}
+
       {/* Closing CTA Section */}
       <section className="py-32 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.05),transparent_50%)]" />
@@ -693,6 +752,12 @@ const BrandsOverview = () => {
                 className="px-10 py-5 bg-gradient-to-r from-orange-500 to-red-500 rounded-full font-bold text-lg transition-all duration-300 hover:scale-105 hover:shadow-2xl min-w-[220px]"
               >
                 Contact Us
+              </Link>
+              <Link
+                to="/products"
+                className="px-10 py-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-full font-bold text-lg transition-all duration-300 hover:bg-white hover:text-gray-900 min-w-[220px]"
+              >
+                Shop all products
               </Link>
               {/* <Link
                 to="/about"

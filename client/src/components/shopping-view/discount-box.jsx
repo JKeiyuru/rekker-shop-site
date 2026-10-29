@@ -9,8 +9,10 @@ import { BadgeCheck, Loader2, Tag, X } from "lucide-react";
 import { API_BASE_URL } from "@/config/config.js";
 
 export default function DiscountBox({ cartItems = [], discount, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [code, setCode] = useState("");
+  // a code copied from a pop-up/banner is waiting here — open the box with it filled in
+  const promo = (() => { try { return localStorage.getItem("rk_promo_code") || ""; } catch { return ""; } })();
+  const [open, setOpen] = useState(!!promo);
+  const [code, setCode] = useState(promo);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,6 +29,7 @@ export default function DiscountBox({ cartItems = [], discount, onChange }) {
       );
       if (data.success) {
         onChange({ code: data.code, discountAmount: data.discountAmount, message: data.message });
+        try { localStorage.removeItem("rk_promo_code"); } catch { /* ignore */ }
         setCode("");
         setOpen(false);
       } else setError(data.message || "That code didn't work.");

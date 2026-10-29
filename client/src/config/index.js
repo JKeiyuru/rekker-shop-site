@@ -437,6 +437,9 @@ export const brandOptionsMap = {
   "saffron": "Saffron",
   "cornells": "Cornells",
   "biosaff": "Bio Saff",
+  "petcare": "PetCare",
+  "pet-care": "PetCare",
+  "pet care": "PetCare",
 };
 
 // Filter Options

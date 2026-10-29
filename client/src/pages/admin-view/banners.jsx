@@ -1,5 +1,6 @@
 // client/src/pages/admin-view/banners.jsx — Admin → Ads & Banners
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { Eye, Loader2, Megaphone, MousePointerClick, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,13 +18,17 @@ const toLocalInput = (d) => { if (!d) return ""; const x = new Date(d); x.setMin
 
 const PLACEMENTS = {
   hero: { label: "Home page — big slider", help: "The large rotating banner at the top of the home page. Best image: 1600 × 700 px.", aspect: "aspect-[16/7]" },
+  popup: { label: "Pop-up (centre of the screen)", help: "A pop-up that opens in the middle of the screen on the shop and/or the corporate site. Show a brand banner with a “Shop this brand now” button, or a message with a discount code. Best image: 1600 × 600 px.", aspect: "aspect-[8/3]" },
   announcement: { label: "Top strip (announcement)", help: "A thin line above the menu, e.g. “Free delivery over KES 3,000”. No image needed.", aspect: "aspect-[16/3]" },
   tile: { label: "Home page — small tiles", help: "3–4 small promo tiles under the slider. Best image: 800 × 600 px.", aspect: "aspect-[4/3]" },
   wide: { label: "Home page — wide banner", help: "A full-width banner between sections. Best image: 1600 × 400 px.", aspect: "aspect-[4/1]" },
   listing: { label: "Products page banner", help: "Shown above the product list. Best image: 1600 × 300 px.", aspect: "aspect-[16/3]" },
 };
 const STATE = { live: ["Live", "bg-green-100 text-green-800"], off: ["Off", "bg-gray-100 text-gray-600"], expired: ["Ended", "bg-red-100 text-red-700"], scheduled: ["Scheduled", "bg-blue-100 text-blue-700"] };
-const empty = { title: "", subtitle: "", placement: "hero", badge: "", ctaLabel: "Shop now", linkUrl: "/products", imageUrl: "", mobileImageUrl: "", bgColor: "#111111", textColor: "#ffffff", startsAt: "", endsAt: "", showCountdown: false, isActive: true };
+const empty = { title: "", subtitle: "", placement: "hero", badge: "", ctaLabel: "Shop now", linkUrl: "/products", imageUrl: "", mobileImageUrl: "", bgColor: "#111111", textColor: "#ffffff", startsAt: "", endsAt: "", showCountdown: false, isActive: true,
+  sites: ["shop"], brandSlug: "", couponCode: "", popupLayout: "card", popupDelay: 3, popupFrequency: "day", popupPages: "home" };
+const FREQUENCIES = [["session", "Once per visit"], ["day", "Once a day"], ["week", "Once a week"], ["always", "Every page load"]];
+const SITE_OPTIONS = [["shop", "Rekker Shop"], ["corporate", "Corporate site (rekker.co.ke)"]];
 
 export default function AdminBanners() {
   const { toast } = useToast();
@@ -34,6 +39,9 @@ export default function AdminBanners() {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const [brands, setBrands] = useState([]);
+  const [codes, setCodes] = useState([]);
+  const [params, setParams] = useSearchParams();
 
   const load = useCallback(async () => {
     try { const { data } = await axios.get(`${api}/get`); setItems(data.data || []); }
@@ -42,10 +50,52 @@ export default function AdminBanners() {
   }, [toast]);
   useEffect(() => { load(); }, [load]);
 
-  function openNew(placement = "hero") { setEditId(null); setForm({ ...empty, placement }); setOpen(true); }
+  // brands (to feature) and live discount codes (to offer) for the pop-up form
+  useEffect(() => {
+    axios.get(`${API_BASE_URL}/api/admin/brands/get`).then(({ data }) => setBrands((data.data || []).filter((b) => b.isActive !== false))).catch(() => {});
+    axios.get(`${API_BASE_URL}/api/admin/discounts/get`).then(({ data }) => setCodes((data.data || []).filter((c) => c.state === "live"))).catch(() => {});
+  }, []);
+
+  function openNew(placement = "hero") {
+    setEditId(null);
+    // pop-ups default to both websites; every other banner has always been shop-only
+    setForm({ ...empty, placement, sites: placement === "popup" ? ["shop", "corporate"] : ["shop"], ctaLabel: placement === "popup" ? "Shop this brand now" : "Shop now" });
+    setOpen(true);
+  }
+
+  // Selecting a brand fills in the link, button text and artwork (only where still empty)
+  function pickBrand(slug, base) {
+    const b = brands.find((x) => x.slug === slug);
+    setForm((f) => {
+      const cur = base || f;
+      return {
+        ...cur,
+        brandSlug: slug,
+        ...(b ? {
+          linkUrl: `/products?brand=${b.slug}`,
+          title: cur.title || `Meet ${b.name}`,
+          subtitle: cur.subtitle || b.tagline || "",
+          imageUrl: cur.imageUrl || b.bannerUrl || "",
+          ctaLabel: !cur.ctaLabel || cur.ctaLabel === "Shop now" ? "Shop this brand now" : cur.ctaLabel,
+        } : {}),
+      };
+    });
+  }
+
+  // /admin/banners?new=popup&brand=petcare — used by the "Create pop-up" shortcut on the Brands page
+  useEffect(() => {
+    const type = params.get("new");
+    if (!type || !PLACEMENTS[type]) return;
+    const slug = params.get("brand");
+    if (slug && !brands.length) return; // wait for the brand list
+    openNew(type);
+    if (slug) pickBrand(slug, { ...empty, placement: type, sites: type === "popup" ? ["shop", "corporate"] : ["shop"], ctaLabel: "Shop this brand now" });
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, brands.length]);
   function openEdit(b) {
     setEditId(b._id);
-    setForm({ ...empty, ...b, startsAt: toLocalInput(b.startsAt), endsAt: toLocalInput(b.endsAt) });
+    setForm({ ...empty, ...b, sites: b.sites?.length ? b.sites : ["shop"], startsAt: toLocalInput(b.startsAt), endsAt: toLocalInput(b.endsAt) });
     setOpen(true);
   }
 
@@ -73,7 +123,7 @@ export default function AdminBanners() {
       <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2"><Megaphone className="w-7 h-7" /> Ads &amp; Banners</h1>
-          <p className="text-gray-600 mt-1">Promote offers, new arrivals and campaigns on the shop. Schedule them ahead and they switch on and off by themselves.</p>
+          <p className="text-gray-600 mt-1">Promote offers, new brands and campaigns on the shop and the corporate site — banners, pop-ups and discount codes. Schedule them ahead and they switch on and off by themselves.</p>
         </div>
         <Button onClick={() => openNew()} className="gap-2"><Plus className="w-4 h-4" /> New banner</Button>
       </div>
@@ -102,6 +152,14 @@ export default function AdminBanners() {
                         <div className="min-w-[180px] flex-1">
                           <p className="font-medium text-sm flex items-center gap-2 flex-wrap">{b.title}<span className={`text-xs px-2 py-0.5 rounded-full ${cls}`}>{label}</span></p>
                           <p className="text-xs text-gray-500 truncate">{b.subtitle || b.linkUrl}</p>
+                          {b.placement === "popup" && (
+                            <p className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-gray-500">
+                              {b.couponCode && <span className="rounded bg-amber-100 px-1.5 py-0.5 font-mono font-semibold text-amber-800">{b.couponCode}</span>}
+                              <span className="rounded bg-gray-100 px-1.5 py-0.5">{(b.sites?.length ? b.sites : ["shop"]).map((x) => (x === "corporate" ? "Corporate" : "Shop")).join(" + ")}</span>
+                              <span className="rounded bg-gray-100 px-1.5 py-0.5">{(FREQUENCIES.find((f) => f[0] === b.popupFrequency) || FREQUENCIES[1])[1]} · {b.popupDelay ?? 3}s delay</span>
+                              <span className="rounded bg-gray-100 px-1.5 py-0.5">{b.popupPages === "all" ? "All pages" : "Home page"}</span>
+                            </p>
+                          )}
                         </div>
                         <div className="text-xs text-gray-500 flex gap-4">
                           <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{b.views || 0}</span>
@@ -135,6 +193,67 @@ export default function AdminBanners() {
                 {Object.entries(PLACEMENTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
+            {form.placement === "popup" && (
+              <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                <p className="text-sm font-semibold">Pop-up settings</p>
+                <div>
+                  <Label>Feature a brand <span className="text-gray-400 font-normal">(optional)</span></Label>
+                  <select className="w-full h-10 rounded-md border bg-white px-3 text-sm" value={form.brandSlug} onChange={(e) => pickBrand(e.target.value)}>
+                    <option value="">— No brand —</option>
+                    {brands.map((b) => <option key={b._id} value={b.slug}>{b.name}</option>)}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">Fills in the link (that brand&apos;s products), the button text and the brand banner for you.</p>
+                </div>
+                <div>
+                  <Label>Layout</Label>
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {[["image", "Banner image", "Your banner artwork with a “Shop this brand now” button under it."], ["card", "Message card", "Headline, message and a discount code with a Copy button."]].map(([v, t, d]) => (
+                      <button type="button" key={v} onClick={() => set("popupLayout", v)} className={`rounded-lg border p-3 text-left ${form.popupLayout === v ? "border-gray-900 bg-white ring-1 ring-gray-900" : "bg-white/60 hover:bg-white"}`}>
+                        <p className="text-sm font-medium">{t}</p><p className="text-xs text-gray-500">{d}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Label>Show on</Label>
+                  <div className="flex flex-wrap gap-4 pt-1">
+                    {SITE_OPTIONS.map(([v, t]) => (
+                      <label key={v} className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={form.sites.includes(v)} onChange={(e) => set("sites", e.target.checked ? [...form.sites, v] : form.sites.filter((x) => x !== v))} />
+                        {t}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div><Label>Appears after (seconds)</Label><Input type="number" min={0} max={120} value={form.popupDelay} onChange={(e) => set("popupDelay", e.target.value)} /></div>
+                  <div>
+                    <Label>How often per visitor</Label>
+                    <select className="w-full h-10 rounded-md border bg-white px-3 text-sm" value={form.popupFrequency} onChange={(e) => set("popupFrequency", e.target.value)}>
+                      {FREQUENCIES.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Which pages</Label>
+                    <select className="w-full h-10 rounded-md border bg-white px-3 text-sm" value={form.popupPages} onChange={(e) => set("popupPages", e.target.value)}>
+                      <option value="home">Home page only</option>
+                      <option value="all">Every page</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <Label>Discount code to show <span className="text-gray-400 font-normal">(optional)</span></Label>
+                  <Input value={form.couponCode} maxLength={24} placeholder="e.g. PETCARE10" className="font-mono uppercase tracking-wider" onChange={(e) => set("couponCode", e.target.value.toUpperCase().replace(/\s/g, ""))} />
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {codes.slice(0, 8).map((c) => (
+                      <button type="button" key={c._id} onClick={() => set("couponCode", c.code)} className="text-xs px-2 py-0.5 rounded-full border bg-white hover:bg-gray-100 font-mono">{c.code}</button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">Shoppers can copy it and it is pre-filled at checkout. Create or manage the code itself (amount, brand, expiry) under <strong>Discount Codes</strong> — this only displays it.</p>
+                </div>
+              </div>
+            )}
+
             <div className="grid sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2"><Label>Headline *</Label><Input value={form.title} placeholder="e.g. Weekend Sale — up to 30% off" onChange={(e) => set("title", e.target.value)} /></div>
               <div><Label>Badge</Label><Input value={form.badge} maxLength={30} placeholder="-30%" onChange={(e) => set("badge", e.target.value)} /></div>

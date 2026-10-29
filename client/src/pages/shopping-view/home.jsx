@@ -20,8 +20,11 @@ import axios from "axios";
 import { API_BASE_URL } from "@/config/config.js";
 import { HeroSlider, PromoTiles, WideBanner } from "@/components/shopping-view/ad-banners";
 import BundleCard from "@/components/shopping-view/bundle-card";
+import useBrands from "@/hooks/use-brands";
+import { sortBrands, productsPath, brandPagePath } from "@/lib/brand-utils";
 
-const brands = [
+// Shown only until the brand list loads from Admin → Brands (or if it can't)
+const fallbackBrands = [
   {
     id: "saffron",
     name: "Saffron Milan",
@@ -63,10 +66,12 @@ function ShoppingHome() {
   const { toast } = useToast();
   const { productList } = useSelector((state) => state.shopProducts);
   const { user, isAuthenticated } = useSelector((state) => state.auth);
+  const { brands: apiBrands } = useBrands();
+  const heroBrands = sortBrands(apiBrands).slice(0, 4);
 
   useSeo({
-    title: "Shop Rekker Online — Saffron Milan, Bio Saff & Cornells",
-    description: "Shop toilet cleaners, hand wash, edge control and more from Saffron Milan, Bio Saff and Cornells — manufactured in Kenya, delivered nationwide with M-Pesa and card checkout.",
+    title: "Shop Rekker Online — Saffron Milan, Bio Saff, Cornells & PetCare",
+    description: "Shop toilet cleaners, hand wash, edge control, pet shampoo and more from Saffron Milan, Bio Saff, Cornells and PetCare — delivered nationwide with M-Pesa and card checkout.",
     path: "/",
     jsonLd: {
       "@context": "https://schema.org",
@@ -74,7 +79,7 @@ function ShoppingHome() {
       name: "Rekker",
       url: "https://shop.rekker.co.ke",
       logo: "https://shop.rekker.co.ke/Logo.jpg",
-      brand: ["Saffron Milan", "Bio Saff", "Cornells"],
+      brand: ["Saffron Milan", "Bio Saff", "Cornells", "PetCare"],
     },
   });
 
@@ -129,7 +134,7 @@ function ShoppingHome() {
               <span className="text-primary"> delivered.</span>
             </h1>
             <p className="mt-6 max-w-lg text-base text-white/65">
-              Shop Saffron Milan, Bio Saff and Cornells in a single cart — manufactured
+              Shop {heroBrands.length ? heroBrands.map((b) => b.name).join(", ").replace(/, ([^,]*)$/, " and $1") : "Saffron Milan, Bio Saff and Cornells"} in a single cart — manufactured
               and distributed by Rekker, paid for with M-Pesa.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
@@ -153,22 +158,64 @@ function ShoppingHome() {
             variants={fade}
             className="grid gap-4 sm:grid-cols-2"
           >
-            {brands.map((brand) => (
-              <Link
-                key={brand.id}
-                to={brand.to}
-                className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:border-white/25 sm:first:col-span-2"
-              >
-                <span className={`inline-flex w-fit rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${brand.tone}`}>
-                  {brand.id}
-                </span>
-                <div className="mt-8">
-                  <h3 className="font-display text-xl font-semibold">{brand.name}</h3>
-                  <p className="mt-1 text-sm text-white/55">{brand.tagline}</p>
-                </div>
-                <ArrowRight className="mt-5 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
-              </Link>
-            ))}
+            {heroBrands.length > 0
+              ? heroBrands.map((brand, idx) => (
+                  idx === 0 && brand.isFeatured ? (
+                    // The spotlight brand (Admin → Brands → "Spotlight on home hero")
+                    <div
+                      key={brand._id}
+                      className="group relative overflow-hidden rounded-2xl border border-white/15 sm:col-span-2"
+                      style={{ background: brand.themeColor || "#14532d" }}
+                    >
+                      {brand.bannerUrl && <img src={brand.bannerUrl} alt={brand.name} className="absolute inset-0 h-full w-full object-cover opacity-60 transition duration-700 group-hover:scale-105" />}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+                      <div className="relative flex min-h-[230px] flex-col justify-end p-6">
+                        {brand.showNewBadge && <span className="mb-3 inline-flex w-fit rounded-full bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-primary-foreground">New brand</span>}
+                        <h3 className="font-display text-2xl font-semibold">{brand.name}</h3>
+                        {brand.tagline && <p className="mt-1 text-sm text-white/75">{brand.tagline}</p>}
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <Link to={productsPath(brand)} className="inline-flex items-center rounded-full bg-white px-5 py-2.5 text-sm font-bold text-ink transition hover:scale-[1.03]">
+                            Shop {brand.name} <ArrowRight className="ml-2 h-4 w-4" />
+                          </Link>
+                          <Link to={brandPagePath(brand)} className="inline-flex items-center rounded-full border border-white/40 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10">
+                            Meet the brand
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <Link
+                      key={brand._id}
+                      to={brandPagePath(brand)}
+                      className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:border-white/25 sm:[&:last-child:nth-child(even)]:col-span-2"
+                    >
+                      <span className="inline-flex w-fit rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white/80">
+                        {brand.showNewBadge ? "New" : brand.category || brand.slug}
+                      </span>
+                      <div className="mt-8">
+                        <h3 className="font-display text-xl font-semibold">{brand.name}</h3>
+                        <p className="mt-1 text-sm text-white/55">{brand.tagline}</p>
+                      </div>
+                      <ArrowRight className="mt-5 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
+                    </Link>
+                  )
+                ))
+              : fallbackBrands.map((brand) => (
+                  <Link
+                    key={brand.id}
+                    to={brand.to}
+                    className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:border-white/25 sm:first:col-span-2"
+                  >
+                    <span className={`inline-flex w-fit rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${brand.tone}`}>
+                      {brand.id}
+                    </span>
+                    <div className="mt-8">
+                      <h3 className="font-display text-xl font-semibold">{brand.name}</h3>
+                      <p className="mt-1 text-sm text-white/55">{brand.tagline}</p>
+                    </div>
+                    <ArrowRight className="mt-5 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
+                  </Link>
+                ))}
           </motion.div>
         </div>
       </section>

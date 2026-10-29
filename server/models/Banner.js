@@ -11,7 +11,13 @@ const PLACEMENTS = [
   "tile",          // small promo tiles under the hero (3-4 across)
   "wide",          // full-width banner between home sections
   "listing",       // banner on top of the products page
+  "popup",         // centre-screen pop-up (shop + corporate site) — image banner and/or discount code
 ];
+
+const SITES = ["shop", "corporate"];
+const POPUP_LAYOUTS = ["card", "image"];            // card = text + code, image = the banner artwork itself
+const POPUP_FREQUENCIES = ["session", "day", "week", "always"];
+const POPUP_PAGES = ["home", "all"];
 
 const BannerSchema = new mongoose.Schema(
   {
@@ -30,6 +36,16 @@ const BannerSchema = new mongoose.Schema(
     showCountdown: { type: Boolean, default: false }, // shows "ends in 2d 04h" when endsAt is set
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },
+    // Which websites show it. Missing/empty = the shop only (how banners always behaved).
+    sites: [{ type: String, enum: SITES }],
+    // Optional link to a brand (the admin form uses it to build the link + CTA)
+    brandSlug: { type: String, trim: true, lowercase: true, default: "" },
+    // Pop-up only
+    couponCode: { type: String, trim: true, uppercase: true, default: "", maxlength: 24 },
+    popupLayout: { type: String, enum: POPUP_LAYOUTS, default: "card" },
+    popupDelay: { type: Number, default: 3, min: 0, max: 120 },            // seconds before it appears
+    popupFrequency: { type: String, enum: POPUP_FREQUENCIES, default: "day" },
+    popupPages: { type: String, enum: POPUP_PAGES, default: "home" },
     clicks: { type: Number, default: 0 },
     views: { type: Number, default: 0 },
   },
@@ -39,5 +55,9 @@ const BannerSchema = new mongoose.Schema(
 BannerSchema.index({ placement: 1, isActive: 1, sortOrder: 1 });
 
 BannerSchema.statics.PLACEMENTS = PLACEMENTS;
+BannerSchema.statics.SITES = SITES;
+BannerSchema.statics.POPUP_LAYOUTS = POPUP_LAYOUTS;
+BannerSchema.statics.POPUP_FREQUENCIES = POPUP_FREQUENCIES;
+BannerSchema.statics.POPUP_PAGES = POPUP_PAGES;
 
 module.exports = mongoose.model("Banner", BannerSchema);

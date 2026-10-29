@@ -1,11 +1,12 @@
+/* eslint-disable react/prop-types */
 // client/src/components/shopping-view/ad-banners.jsx
 // Storefront side of Admin → Ads & Banners. Each component asks the API for
 // the banners in its slot and renders nothing at all if there are none, so
 // an empty slot never leaves a gap on the page.
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import axios from "axios";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Copy, X } from "lucide-react";
 import { API_BASE_URL } from "@/config/config.js";
 
 const cache = {};
@@ -197,4 +198,127 @@ export function WideBanner({ placement = "wide", className = "mx-auto max-w-7xl 
   const banners = useBanners(placement);
   if (!banners.length) return null;
   return <section className={`${className} space-y-4`}>{banners.map((b) => <Wide key={b._id} b={b} />)}</section>;
+}
+
+// ── Centre-screen pop-up ────────────────────────────────────────────────────
+// Admin → Ads & Banners → Pop-up. Two layouts:
+//   • "image" — the banner artwork itself with a call-to-action button under it
+//   • "card"  — headline, message and (optionally) a discount code with Copy
+// How often it appears, the delay and the pages are all set in the admin form.
+// A copied/used code is remembered and pre-filled in the checkout code box.
+const POPUP_SKIP = [/^\/checkout/, /^\/cart/, /^\/payment/, /^\/auth/, /^\/admin/];
+const FREQ_MS = { day: 864e5, week: 6048e5 };
+const shownThisLoad = new Set();
+
+const popupStore = (freq) => { try { return freq === "session" ? window.sessionStorage : window.localStorage; } catch { return null; } };
+// the timestamp is part of the key, so editing a pop-up in the admin shows it again
+const popupKey = (b) => `rk_popup_${b._id}_${new Date(b.updatedAt || 0).getTime()}`;
+function popupDue(b) {
+  if (b.popupFrequency === "always") return true;
+  const st = popupStore(b.popupFrequency);
+  if (!st) return true;
+  try {
+    const last = Number(st.getItem(popupKey(b)) || 0);
+    if (!last) return true;
+    if (b.popupFrequency === "session") return false;
+    return Date.now() - last > (FREQ_MS[b.popupFrequency] || FREQ_MS.day);
+  } catch { return true; }
+}
+function markPopupSeen(b) {
+  const st = popupStore(b.popupFrequency);
+  try { st?.setItem(popupKey(b), String(Date.now())); } catch { /* private mode */ }
+}
+function rememberCode(code) {
+  if (!code) return;
+  try { localStorage.setItem("rk_promo_code", code); } catch { /* ignore */ }
+}
+
+export function PromoPopup() {
+  const { banners } = useBannerState("popup");
+  const { pathname } = useLocation();
+  const [active, setActive] = useState(null);
+  const [copied, setCopied] = useState(false);
+  useViewOnce(active?._id);
+  const countdown = useCountdown(active?.endsAt, active?.showCountdown);
+
+  useEffect(() => {
+    if (active || POPUP_SKIP.some((rx) => rx.test(pathname))) return;
+    const next = banners.find((b) => !shownThisLoad.has(b._id) && (b.popupPages === "all" || pathname === "/") && popupDue(b));
+    if (!next) return;
+    const t = setTimeout(() => { shownThisLoad.add(next._id); markPopupSeen(next); setActive(next); }, Math.max(0, Number(next.popupDelay ?? 3)) * 1000);
+    return () => clearTimeout(t);
+  }, [banners, pathname, active]);
+
+  const close = useCallback(() => { setActive(null); setCopied(false); }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [active, close]);
+
+  if (!active) return null;
+  const b = active;
+  const link = b.linkUrl || (b.brandSlug ? `/products?brand=${b.brandSlug}` : "/products");
+  const isImage = b.popupLayout === "image" && b.imageUrl;
+
+  async function copyCode() {
+    rememberCode(b.couponCode);
+    try { await navigator.clipboard.writeText(b.couponCode); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard blocked */ }
+  }
+  const onCta = () => { rememberCode(b.couponCode); track(b._id, "click"); close(); };
+
+  const codeBox = b.couponCode && (
+    <button type="button" onClick={copyCode} className="group flex items-center gap-3 rounded-xl border-2 border-dashed border-current px-4 py-2.5 text-left" aria-label={`Copy discount code ${b.couponCode}`}>
+      <span>
+        <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] opacity-70">Your code</span>
+        <span className="block font-mono text-xl font-black tracking-[0.18em]">{b.couponCode}</span>
+      </span>
+      <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold opacity-80 group-hover:opacity-100">
+        {copied ? <><Check className="h-4 w-4" /> Copied</> : <><Copy className="h-4 w-4" /> Copy</>}
+      </span>
+    </button>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px] animate-in fade-in duration-200" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+      <div role="dialog" aria-modal="true" aria-label={b.title} className={`relative w-full overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 duration-200 ${isImage ? "max-w-2xl" : "max-w-md"}`}>
+        <button type="button" aria-label="Close" onClick={close} autoFocus className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur transition hover:bg-black/75">
+          <X className="h-4 w-4" />
+        </button>
+
+        {isImage ? (
+          <>
+            <SmartLink to={link} onClick={onCta} className="block">
+              <img src={b.imageUrl} alt={b.title} className="block h-auto w-full" />
+            </SmartLink>
+            <div className="flex flex-col items-stretch gap-3 bg-white p-4 text-gray-900 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              {codeBox ? <div className="sm:max-w-[55%]">{codeBox}</div> : <p className="text-sm text-gray-600">{b.subtitle}</p>}
+              <SmartLink to={link} onClick={onCta} className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-7 py-3 text-sm font-bold text-primary-foreground shadow transition hover:scale-[1.03]">
+                {b.ctaLabel || "Shop now"}
+              </SmartLink>
+            </div>
+          </>
+        ) : (
+          <>
+            {b.imageUrl && <img src={b.imageUrl} alt="" className="block aspect-[16/8] w-full object-cover" />}
+            <div className="space-y-4 p-6 text-center sm:p-8" style={{ background: b.bgColor, color: b.textColor }}>
+              {b.badge && <span className="inline-block rounded-full bg-primary px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">{b.badge}</span>}
+              <h2 className="text-2xl font-black leading-tight sm:text-3xl">{b.title}</h2>
+              {b.subtitle && <p className="text-sm opacity-90 sm:text-base">{b.subtitle}</p>}
+              {codeBox && <div className="mx-auto max-w-xs text-left">{codeBox}</div>}
+              {countdown && <p className="text-xs font-semibold opacity-90">⏱ Ends in {countdown}</p>}
+              <SmartLink to={link} onClick={onCta} className="inline-flex w-full items-center justify-center rounded-full bg-white px-7 py-3 text-sm font-bold text-gray-900 shadow-lg transition hover:scale-[1.02] sm:w-auto">
+                {b.ctaLabel || "Shop now"}
+              </SmartLink>
+            </div>
+          </>
+        )}
+        <button type="button" onClick={close} className="block w-full bg-white pb-3 pt-0 text-center text-xs text-gray-500 hover:text-gray-800">No thanks</button>
+      </div>
+    </div>
+  );
 }

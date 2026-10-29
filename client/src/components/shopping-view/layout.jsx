@@ -1,12 +1,20 @@
 import { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { useEffect } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import StoreHeader from "./header";
 import StoreFooter from "./footer";
 import MobileBottomNav from "./mobile-bottom-nav";
-import { AnnouncementBar } from "./ad-banners";
+import { AnnouncementBar, PromoPopup } from "./ad-banners";
 import Concierge from "./concierge";
 
 function ShoppingLayout() {
+  // ?promo=CODE (from the corporate-site pop-up) is kept and pre-filled in the checkout code box
+  const { search } = useLocation();
+  useEffect(() => {
+    const code = (new URLSearchParams(search).get("promo") || "").toUpperCase();
+    if (/^[A-Z0-9_-]{3,24}$/.test(code)) { try { localStorage.setItem("rk_promo_code", code); } catch { /* ignore */ } }
+  }, [search]);
+
   // Lifted here (rather than living only inside the header) so the mobile
   // bottom nav's Wishlist/Cart tabs can open the exact same sheets the
   // header's icons open, instead of duplicating that UI.
@@ -28,6 +36,7 @@ function ShoppingLayout() {
       </main>
       <StoreFooter />
       <Concierge />
+      <PromoPopup />
       <MobileBottomNav
         setOpenCartSheet={setOpenCartSheet}
         setOpenWishlistSheet={setOpenWishlistSheet}
