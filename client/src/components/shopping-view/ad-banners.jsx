@@ -3,11 +3,13 @@
 // Storefront side of Admin → Ads & Banners. Each component asks the API for
 // the banners in its slot and renders nothing at all if there are none, so
 // an empty slot never leaves a gap on the page.
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import axios from "axios";
 import { Check, ChevronLeft, ChevronRight, Copy, X } from "lucide-react";
 import { API_BASE_URL } from "@/config/config.js";
+import useBrands from "@/hooks/use-brands";
+import { productsPath, sortBrands } from "@/lib/brand-utils";
 
 const cache = {};
 function useBannerState(placement) {
@@ -90,7 +92,20 @@ export function AnnouncementBar() {
 // `fallback` is shown only when no hero banner is scheduled, so the home page
 // is never empty (it keeps the original static hero until ads are added).
 export function HeroSlider({ fallback = null }) {
-  const { banners, loaded } = useBannerState("hero");
+  const { banners: real, loaded } = useBannerState("hero");
+  // When the admin runs hero banners, the home hero would otherwise lose the spotlight brand — add it as the first slide
+  // (unless a hero banner already promotes that brand).
+  const { brands } = useBrands();
+  const spot = sortBrands(brands).find((b) => b.isFeatured);
+  const banners = useMemo(() => {
+    if (!real.length || !spot) return real;
+    if (real.some((b) => b.brandSlug === spot.slug || (b.linkUrl || "").includes(`brand=${spot.slug}`))) return real;
+    return [{
+      _id: `brand-${spot._id}`, brandSlide: true, title: spot.name, subtitle: spot.tagline || spot.description || "",
+      badge: spot.showNewBadge ? "NEW BRAND" : "", ctaLabel: `Shop ${spot.name} now`, linkUrl: productsPath(spot),
+      imageUrl: spot.bannerUrl || "", bgColor: /^#[0-9a-f]{6}$/i.test(spot.themeColor || "") && spot.themeColor !== "#000000" ? spot.themeColor : "#14532d", textColor: "#ffffff",
+    }, ...real];
+  }, [real, spot]);
   const [i, setI] = useState(0);
   const paused = useRef(false);
   const touchX = useRef(null);
@@ -101,7 +116,7 @@ export function HeroSlider({ fallback = null }) {
     return () => clearInterval(t);
   }, [banners.length, go]);
   const current = banners[i];
-  useViewOnce(current?._id);
+  useViewOnce(current?.brandSlide ? null : current?._id);
   if (!loaded) return null;
   if (!banners.length) return fallback;
 
@@ -114,7 +129,19 @@ export function HeroSlider({ fallback = null }) {
       onTouchEnd={(e) => { if (touchX.current === null) return; const dx = e.changedTouches[0].clientX - touchX.current; if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1); touchX.current = null; }}
     >
       <div className="flex transition-transform duration-700 ease-out" style={{ transform: `translateX(-${i * 100}%)` }}>
-        {banners.map((b, idx) => (
+        {banners.map((b, idx) => b.brandSlide ? (
+          <div key={b._id} className="relative w-full shrink-0 min-h-[260px] sm:min-h-[340px] lg:min-h-[420px]" style={{ background: `linear-gradient(135deg, ${b.bgColor}, #0b0b0b)`, color: "#fff" }}>
+            <div className="mx-auto grid h-full min-h-[260px] max-w-7xl items-center gap-6 px-6 py-8 sm:px-10 sm:min-h-[340px] lg:min-h-[420px] lg:grid-cols-[1fr_1.1fr]">
+              <div className="flex flex-col gap-3">
+                {b.badge && <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-wide" style={{ color: b.bgColor }}>{b.badge}</span>}
+                <h2 className="text-4xl font-black leading-tight sm:text-5xl">{b.title}</h2>
+                {b.subtitle && <p className="max-w-md text-base opacity-90 sm:text-lg">{b.subtitle}</p>}
+                <div className="pt-1"><SmartLink to={b.linkUrl} className="inline-flex items-center rounded-full bg-white px-7 py-3.5 text-sm font-bold text-gray-900 shadow-lg transition hover:scale-[1.03]">{b.ctaLabel}</SmartLink></div>
+              </div>
+              {b.imageUrl && <SmartLink to={b.linkUrl} className="block overflow-hidden rounded-2xl shadow-2xl"><img src={b.imageUrl} alt={b.title} className="block w-full" /></SmartLink>}
+            </div>
+          </div>
+        ) : (
           <div key={b._id} className="relative w-full shrink-0 min-h-[260px] sm:min-h-[340px] lg:min-h-[420px]" style={{ background: b.bgColor, color: b.textColor }}>
             {b.imageUrl && (
               <picture>

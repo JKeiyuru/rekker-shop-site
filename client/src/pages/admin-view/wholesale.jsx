@@ -18,6 +18,9 @@ const STATUSES = [
 ];
 const VOLUME = { "under-50k": "Under KES 50k", "50k-200k": "KES 50k–200k", "200k-500k": "KES 200k–500k", "above-500k": "Above KES 500k", "not-sure": "Not sure yet" };
 const TYPE = { supermarket: "Supermarket", "retail-shop": "Retail shop", wholesaler: "Wholesaler", "salon-barber": "Salon / barber", pharmacy: "Pharmacy", institution: "Institution", "online-seller": "Online seller", other: "Other" };
+const KIND = { stockist: "Stockist", wholesaler: "Wholesaler", distributor: "Distributor" };
+const FREQ = { "one-off": "One-off", weekly: "Weekly", fortnightly: "Every 2 weeks", monthly: "Monthly" };
+const PAY = { prepay: "Pays before delivery", "cash-on-delivery": "Cash on delivery", "credit-request": "Requests credit" };
 const waLink = (phone, name) => `https://wa.me/${String(phone).replace(/\D/g, "").replace(/^0/, "254")}?text=${encodeURIComponent(`Hello ${name}, this is Rekker following up on your wholesale request.`)}`;
 
 export default function AdminWholesale() {
@@ -67,7 +70,7 @@ export default function AdminWholesale() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-lg">{r.businessName} <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${st[2]}`}>{st[1]}</span></p>
-                      <p className="text-sm text-gray-600">{r.contactName} · {TYPE[r.businessType] || r.businessType} · {new Date(r.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</p>
+                      <p className="text-sm text-gray-600">{KIND[r.requestType] ? <strong>{KIND[r.requestType]}</strong> : null} · {r.contactName} · {TYPE[r.businessType] || r.businessType} · {r.source === "corporate" ? "via corporate site" : "via shop"} · {new Date(r.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</p>
                     </div>
                     <div className="flex gap-2">
                       <a href={`tel:${r.phone}`}><Button variant="outline" size="sm" className="gap-1"><Phone className="w-3.5 h-3.5" />Call</Button></a>
@@ -83,6 +86,16 @@ export default function AdminWholesale() {
                     {r.kraPin && <p><span className="text-gray-500">KRA PIN:</span> {r.kraPin}</p>}
                     {r.brandsInterested?.length > 0 && <p><span className="text-gray-500">Brands:</span> {r.brandsInterested.join(", ")}</p>}
                   </div>
+                  {r.physicalAddress && <p className="text-sm mt-2"><span className="text-gray-500">Address:</span> {r.physicalAddress}{r.deliveryAddress && r.deliveryAddress !== r.physicalAddress ? ` · Deliver to: ${r.deliveryAddress}` : ""} {r.mapLink && <a className="text-blue-600 underline" href={r.mapLink} target="_blank" rel="noreferrer">map</a>}</p>}
+                  {r.items?.length > 0 && (
+                    <div className="mt-2 rounded-lg border bg-gray-50 p-3 text-sm">
+                      <p className="font-medium mb-1">Order request</p>
+                      <ul className="space-y-0.5">{r.items.map((i, k) => <li key={k}>{i.brandName}{i.productName ? ` — ${i.productName}` : ""}: <strong>{i.quantity}</strong> units</li>)}</ul>
+                      {r.moqSnapshot?.length > 0 && <p className="mt-1 text-xs text-gray-500">MOQ met: {r.moqSnapshot.map((m) => `${m.brandName} ${m.quantity}/${m.moq}`).join(" · ")}</p>}
+                      <p className="mt-1 text-xs text-gray-600">{FREQ[r.orderFrequency]} · {PAY[r.paymentPreference]}{r.yearsInBusiness != null ? ` · ${r.yearsInBusiness} yrs in business` : ""}{r.currentSuppliers ? ` · Buys from: ${r.currentSuppliers}` : ""}</p>
+                    </div>
+                  )}
+                  {r.requestType === "distributor" && <p className="text-sm mt-2"><span className="text-gray-500">Territory:</span> {(r.territoryCounties || []).join(", ") || "—"} · {r.outletsServed ?? "?"} outlets · {r.hasWarehouse ? "has warehouse" : "no warehouse"} · {r.hasDeliveryVehicles ? "has vehicles" : "no vehicles"}</p>}
                   {r.productsInterested && <p className="text-sm mt-2"><span className="text-gray-500">Interested in:</span> {r.productsInterested}</p>}
                   {r.message && <p className="text-sm mt-2 bg-gray-50 rounded-lg p-3">{r.message}</p>}
 

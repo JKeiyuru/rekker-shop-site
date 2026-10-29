@@ -34,7 +34,7 @@ import { Pencil, Trash2, Plus, Tag, Search, RefreshCw, Megaphone, Link2, Star } 
 const emptyForm = {
   name: "", slug: "", tagline: "", description: "", story: "",
   logoUrl: "", bannerUrl: "", themeColor: "#000000",
-  category: "", highlightsText: "", isFeatured: false, showNewBadge: false,
+  category: "", wholesaleMoq: 0, highlightsText: "", isFeatured: false, showNewBadge: false,
   isActive: true, sortOrder: 0,
 };
 
@@ -90,6 +90,7 @@ function AdminBrands() {
       bannerUrl: brand.bannerUrl || "",
       themeColor: brand.themeColor || "#000000",
       category: brand.category || "",
+      wholesaleMoq: brand.wholesaleMoq ?? 0,
       highlightsText: (brand.highlights || []).join("\n"),
       isFeatured: !!brand.isFeatured,
       showNewBadge: !!brand.showNewBadge,
@@ -119,6 +120,7 @@ function AdminBrands() {
       ...rest,
       highlights: highlightsText.split("\n").map((l) => l.trim()).filter(Boolean),
       sortOrder: Number(form.sortOrder) || 0,
+      wholesaleMoq: Math.max(0, Math.floor(Number(form.wholesaleMoq) || 0)),
       slug: slugify(form.slug),
     };
     const result = editId
@@ -324,6 +326,12 @@ function AdminBrands() {
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
               />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Trade MOQ (minimum units)</Label>
+              <Input type="number" min={0} value={form.wholesaleMoq} onChange={(e) => setForm({ ...form, wholesaleMoq: e.target.value })} />
+              <p className="text-xs text-muted-foreground">Stockists, wholesalers and distributors must order at least this many units of this brand. Leave 0 to use the default (12).</p>
             </div>
 
             <div className="space-y-1">

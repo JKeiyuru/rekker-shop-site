@@ -21,6 +21,7 @@ import { API_BASE_URL } from "@/config/config.js";
 import { HeroSlider, PromoTiles, WideBanner } from "@/components/shopping-view/ad-banners";
 import BundleCard from "@/components/shopping-view/bundle-card";
 import useBrands from "@/hooks/use-brands";
+import { FeaturedBrandBand, ShopByBrand } from "@/components/shopping-view/featured-brand";
 import { sortBrands, productsPath, brandPagePath } from "@/lib/brand-utils";
 
 // Shown only until the brand list loads from Admin → Brands (or if it can't)
@@ -223,6 +224,10 @@ function ShoppingHome() {
 
       {/* Promo tiles (Ads & Banners → small tiles) */}
       <PromoTiles />
+
+      {/* The spotlight brand (Admin → Brands) with a clear call to action, and every brand one click from its products */}
+      <FeaturedBrandBand />
+      <ShopByBrand />
 
       {/* Promises */}
       <section className="border-b border-border bg-secondary">

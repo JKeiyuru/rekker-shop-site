@@ -27,6 +27,32 @@ const WholesaleRequestSchema = new mongoose.Schema(
     },
     message: { type: String, trim: true, default: "", maxlength: 4000 },
 
+    // ── Comprehensive trade application (stockist / wholesaler / distributor) ──
+    requestType: { type: String, enum: ["stockist", "wholesaler", "distributor"], default: "stockist", index: true },
+    source: { type: String, enum: ["shop", "corporate"], default: "shop" },
+    yearsInBusiness: { type: Number, default: null, min: 0, max: 200 },
+    physicalAddress: { type: String, trim: true, default: "", maxlength: 400 },
+    deliveryAddress: { type: String, trim: true, default: "", maxlength: 400 },
+    mapLink: { type: String, trim: true, default: "", maxlength: 400 },
+    // What they want to order. Each brand's total must reach that brand's MOQ.
+    items: [{
+      _id: false,
+      brandSlug: { type: String, trim: true, default: "" },
+      brandName: { type: String, trim: true, default: "" },
+      productId: { type: String, trim: true, default: "" },
+      productName: { type: String, trim: true, default: "", maxlength: 200 },
+      quantity: { type: Number, required: true, min: 1 },
+    }],
+    moqSnapshot: [{ _id: false, brandSlug: String, brandName: String, moq: Number, quantity: Number }], // MOQ at the time of the request
+    orderFrequency: { type: String, enum: ["one-off", "weekly", "fortnightly", "monthly"], default: "monthly" },
+    paymentPreference: { type: String, enum: ["prepay", "cash-on-delivery", "credit-request"], default: "prepay" },
+    currentSuppliers: { type: String, trim: true, default: "", maxlength: 500 },
+    // Distributors
+    territoryCounties: [{ type: String, trim: true }],
+    outletsServed: { type: Number, default: null, min: 0 },
+    hasWarehouse: { type: Boolean, default: false },
+    hasDeliveryVehicles: { type: Boolean, default: false },
+
     // Admin workflow
     status: {
       type: String,

@@ -21,7 +21,9 @@ const WHATSAPP = "254796183064";
 
 function QtyBox({ item, busy, onSet }) {
   const [text, setText] = useState(String(item.quantity));
-  useEffect(() => setText(String(item.quantity)), [item.quantity]);
+  useEffect(() => {
+    setText(String(item.quantity));
+  }, [item.quantity]);
   const limit = item.maxPerOrder > 0 ? Math.min(item.totalStock ?? Infinity, item.maxPerOrder) : item.totalStock ?? Infinity;
 
   const commit = () => {

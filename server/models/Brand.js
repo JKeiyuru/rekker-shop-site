@@ -17,6 +17,8 @@ const BrandSchema = new mongoose.Schema(
     // Merchandising — controlled from Admin → Brands
     category: { type: String, trim: true, default: "" },        // e.g. "Pet Care", "Home & Cleaning"
     highlights: [{ type: String, trim: true }],                  // short bullet points for brand cards/pages
+    // Trade requests (stockists / wholesalers / distributors): minimum units per brand. 0 = use the default (see helpers/trade.js)
+    wholesaleMoq: { type: Number, default: 0, min: 0 },
     isFeatured: { type: Boolean, default: false },               // spotlight on the home-page hero (shop + corporate)
     showNewBadge: { type: Boolean, default: false },             // "New" ribbon on cards and the brands pages
     isActive: { type: Boolean, default: true },
